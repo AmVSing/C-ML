@@ -30,7 +30,7 @@ static void compute_strides(Tensor* t) {
 
     // from the next dimension stride and length, work out curr stride
     for (size_t i = t->rank - 1; i > 0; --i) {
-        t->strides[i] = t->strides[i + 1] * t->shape[i + 1];
+        t->strides[i-1] = t->strides[i] * t->shape[i];
     }
 
 }
@@ -79,11 +79,6 @@ Tensor* tensor_fill(Tensor* t, float value) {
     return t;
 }
 
-Tensor* tensor_zeros(size_t rank, const size_t shape[]) {
-    Tensor t = make_tensor(rank, shape);
-
-    return tensor_fill(&t, 0);
-}
 
 Tensor* tensor_rand(Tensor* t, float min, float max) {
     assert ( t != NULL );

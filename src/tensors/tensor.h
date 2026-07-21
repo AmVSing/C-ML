@@ -39,14 +39,14 @@ typedef struct tensor_s {
 /* creation + destruction */
 
 // create
-Tensor make_tensor(size_t rank, const size_t shape[]); // create tensor
+Tensor make_tensor(size_t rank, const size_t shape[]); // creates 0 tensor
 // Tensor itself is not malloc-d but the tensor's data is
 Tensor tensor_from_data(size_t rank, const size_t shape[], float* data); // create tensor from data
 void free_tensor(Tensor* t); 
 
 // other helpful funcs
 Tensor* tensor_fill(Tensor* t, float value); // Sets all tensor elements to value
-Tensor* tensor_zeros(size_t rank, const size_t shape[]); // returns a 0 tensor
+
 Tensor* tensor_rand(Tensor* t, float min, float max); // creates tensor populated with randfloats from [min, max]
 
 /* ops */
