@@ -1,3 +1,7 @@
+/*
+    header file for tensors
+*/
+
 #ifndef TENSOR_H
 #define TENSOR_H
 

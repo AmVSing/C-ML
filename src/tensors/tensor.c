@@ -1,9 +1,15 @@
+/*
+    implementation of tensors
+*/
+
 #include "tensor.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 /*
+struct from tensor.h
+
 typedef struct tensor_s {
     size_t rank; // no. of dimensions (0 - scalar, 1 - vector, 2 - matrix ..)
     size_t shape[MAX_DIMS]; // shape[n] = size of dimension n
@@ -14,6 +20,7 @@ typedef struct tensor_s {
 } Tensor;
 */
 
+// Tensor creations
 static void compute_strides(Tensor* t) {
     assert( t != NULL );
 
@@ -57,33 +64,39 @@ Tensor make_tensor(size_t rank, const size_t shape[]) {
 
 }
 
+// helpful functions
 
+static float rand_float(float min, float max) {
+    return min + (max-min) * ((float) rand() / (float) RAND_MAX);
+}
 
-Tensor make_tensor(size_t rank, const size_t shape[]) {
+Tensor* tensor_fill(Tensor* t, float value) {
+    assert( t != NULL );
     
-    
-    assert( shape != NULL || rank = 0 ); // if rank is 0, shape can be null
-
-    Tensor t = {0}; // by default all fields set to 0
-
-    t.rank = rank;
-
-    t.no_elems = 1;
-
-    for (size_t i = 0; i < rank; i++) {
-        t.no_elems *= shape[i];
-        t.shape[i] = shape[i];
+    for (size_t i = 0; i < t->no_elems; i++) {
+        t->data[i] = value;
     }
-
-    t.data = calloc(t.no_elems, sizeof(*t.data));
-        t.owns_data = true;
-
-    
-
-    compute_strides(&t);
     return t;
 }
 
+Tensor* tensor_zeros(size_t rank, const size_t shape[]) {
+    Tensor t = make_tensor(rank, shape);
+
+    return tensor_fill(&t, 0);
+}
+
+Tensor* tensor_rand(Tensor* t, float min, float max) {
+    assert ( t != NULL );
+
+    for (size_t i = 0; i < t->no_elems; i++) {
+        t->data[i] = rand_float(min, max);
+    }
+
+    return t;
+}
+
+
+// free-ing
 void free_tensor(Tensor* t) {
     assert ( t != NULL );
 
