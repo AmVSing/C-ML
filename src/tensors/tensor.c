@@ -98,6 +98,7 @@ Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data) {
 
 
 inline Tensor tensor_copy(const Tensor* t) {
+    assert( t != NULL );
     return tensor_from_data(t->rank, t->shape, t->data);
 }
 // helpful functions
@@ -162,9 +163,15 @@ inline bool is_matrix(const Tensor* t) {
 // operations
 // tensor-scalar ops
 
-Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
+static void valid_bin_scalar_op(const Tensor* t, const Tensor* out) {
     assert( t != NULL );
     assert( out != NULL );
+
+    assert( same_shape(t, out) );
+}
+
+Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
+    valid_bin_scalar_op(t, out);
 
     for (size_t i = 0; i < t->no_elems; i++) {
         out->data[i] = (t->data[i] + x); // elem `op` scalar 
@@ -174,12 +181,156 @@ Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
 }
 
 Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out) {
-    assert( t != NULL );
-    assert( out != NULL );
+    valid_bin_scalar_op(t, out);
 
     for (size_t i = 0; i < t->no_elems; i++) {
         out->data[i] = (t->data[i] * x); // elem `op` scalar 
     }
 
     return out;
+}
+
+// Tensor-tensor ops
+
+static void valid_bin_tensor_op(const Tensor* t1, const Tensor* t2, const Tensor* res) {
+    assert( t1 != NULL );
+    assert( t2 != NULL );
+    assert( res != NULL );
+
+    assert( same_shape(t1, t2) );
+    assert( same_shape(t1, res) );
+}
+// functions below all have the same shape, just copied out purely 
+// for efficiency
+Tensor* tensor_add(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    valid_bin_tensor_op(t1, t2, res);
+
+    for (size_t i = 0; i < t1->no_elems; i++) {
+        res->data[i] = t1->data[i] + t2->data[i];
+    }
+    return res;
+}
+Tensor* tensor_sub(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    valid_bin_tensor_op(t1, t2, res);
+
+    for (size_t i = 0; i < t1->no_elems; i++) {
+        res->data[i] = t1->data[i] - t2->data[i];
+    }
+    return res;
+
+}
+Tensor* tensor_mult(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    valid_bin_tensor_op(t1, t2, res);
+    
+    for (size_t i = 0; i < t1->no_elems; i++) {
+        res->data[i] = t1->data[i] * t2->data[i];
+    }
+    return res;
+} 
+
+Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    valid_bin_tensor_op(t1, t2, res);
+
+    for (size_t i = 0; i < t1->no_elems; i++) {
+        res->data[i] = t1->data[i] / t2->data[i];
+    }
+    return res;
+}
+
+// matrix ops
+
+bool matmultiplicable(const Tensor* m1, const Tensor* m2) {
+    assert( is_matrix(m1) );
+    assert( is_matrix(m2) );
+
+    return m1->shape[1] == m2->shape[0];
+}
+
+Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
+    // assumes contiguous matrices
+
+    assert( matmultiplicable(m1, m2) );
+    assert(is_matrix(out));
+    assert(out != m1 && out != m2);
+    assert(out->shape[0] == m1->shape[0]);
+    assert(out->shape[1] == m2->shape[1]);
+
+    // m x k `matmul` k x n -> m x n
+    const size_t m = m1->shape[0];
+    const size_t k = m1->shape[1];
+    const size_t n = m2->shape[1];
+
+    memset(out->data, 0, out->no_elems * sizeof(*out->data)); // tensor 0
+
+     for (size_t i = 0; i < m; ++i) {
+        float* out_row = &out->data[i * n]; // start of out row
+        const float* m1_row = &m1->data[i * k]; // start of m1 row
+
+        for (size_t p = 0; p < k; ++p) {
+            const float curr = m1_row[p];
+            const float* m2_row = &m2->data[p * n]; // out row
+
+            for (size_t j = 0; j < n; ++j) {
+                out_row[j] += curr * m2_row[j];
+            }
+        }
+    }
+    return out;
+}
+
+Tensor transpose_view(const Tensor* m) {
+    // INVALID WHEN ORIGINAL TENSOR IS FREE'D
+    assert( is_matrix(m) ); // already checks for null
+
+    Tensor out = *m;
+
+    out.shape[0] = m->shape[1];
+    out.shape[1] = m->shape[0];
+
+    out.strides[0] = m->strides[1];
+    out.strides[1] = m->strides[0];
+
+    out.owns_data = false;
+
+    return out;
+}
+
+static inline size_t flatten_index(const Tensor* m, size_t i, size_t j) {
+    return i * m->strides[0] + j * m->strides[1];
+}
+
+Tensor* transpose(const Tensor* m, Tensor* out) {
+
+    // check not null and matrices
+    assert( is_matrix(m) );
+    assert( is_matrix(out) );
+
+    // check shapes align
+    assert( out->shape[0] == m->shape[1] );
+    assert( out->shape[1] == m->shape[0] );
+
+    for (size_t i = 0; i < m->shape[0]; i++) {
+        for (size_t j = 0; j < m->shape[1]; j++) {
+            out->data[flatten_index(out, j, i)] = m->data[flatten_index(m, i, j)];
+        }
+    }
+
+    return out;
+}
+
+Tensor* transpose_inplace(Tensor* m) {
+    assert( is_matrix(m) );
+    assert( m->shape[0] == m ->shape[1] ); // square only
+
+    for (size_t i = 0; i < m->shape[0]; i++) {
+        for (size_t j = i + 1; j < m->shape[1]; j++) {
+            size_t i1 = flatten_index(m, i, j);
+            size_t i2 = flatten_index(m, j, i);
+
+            float temp = m->data[i1];
+            m->data[i1] = m->data[i2];
+            m->data[i2] = temp;
+        }
+    }
+    return m;
 }

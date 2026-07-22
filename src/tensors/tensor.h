@@ -25,6 +25,7 @@ data = [1,2,3,4,5,6]
 shape = [2, 3]
 strides = [3, 1] (moving down a row increase position by 3, moving across 
 a column increases position by 1)
+NOTE - OTHER FUNCTIONS DO NOT ALWAYS RESPECT STRIDES
 */
 
 
@@ -40,6 +41,7 @@ typedef struct tensor_s {
 /* creation + destruction */
 
 // create
+
 Tensor make_tensor(size_t rank, const size_t shape[]); // creates 0 tensor
 // Tensor itself is not malloc-d but the tensor's data is
 Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data); // create tensor from data
@@ -48,31 +50,43 @@ Tensor tensor_copy(const Tensor* t); // create copy of existing tensor
 void free_tensor(Tensor* t); 
 
 // other helpful funcs
-Tensor* tensor_fill(Tensor* t, float value); // Sets all tensor elements to value
 
+Tensor* tensor_fill(Tensor* t, float value); // Sets all tensor elements to value
 Tensor* tensor_rand(Tensor* t, float min, float max); // creates tensor populated with randfloats from [min, max]
 
 /* ops */
 
 // shape comparison funcs
+
 bool same_shape(const Tensor* t1, const Tensor* t2); // true if t1->shape == t2->shape
 bool is_matrix(const Tensor* t); // true iff t points to a matrix
 
 // actual ops - (tensor, scalar)
+
 Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out); // adds x to all entries
-// PRE: same_shape has been called
 Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out); // multiples all entries by x
-// PRE: same_shape has been called
 
 // actual ops - (tensor, tensor)
+
 Tensor* tensor_add(const Tensor* t1, const Tensor* t2, Tensor* res);
 Tensor* tensor_sub(const Tensor* t1, const Tensor* t2, Tensor* res);
 Tensor* tensor_mult(const Tensor* t1, const Tensor* t2, Tensor* res); // elementwise multiplication not dot product
 Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res);
 
 // matrix ops
-Tensor* matmul(const Tensor* a, const Tensor* b, Tensor* out); 
-Tensor* transpose(const Tensor* a, Tensor* out);
+
+bool matmultiplicable(const Tensor* m1, const Tensor* m2);
+Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out); 
+
+Tensor transpose_view(const Tensor* m); // works in O(1) time to create a transposed view
+// INVALID WHEN ORIGINAL TENSOR IS FREE'D
+// NOTE - OTHER FUNCTIONS DO NOT ALWAYS RESPECT STRIDES, PURELY FOR TESTING
+
+Tensor* transpose(const Tensor* m, Tensor* out); // creates full transpose of matrix in O(n)
+// this version is more costly to make, but works better with sequential access due to spatial locality
+
+Tensor* transpose_inplace(Tensor* m); // transposes the matrix in place FOR SQUARE ONLY
+// O(n/2) instead of O(n)
 
 /* display helpers */
 
