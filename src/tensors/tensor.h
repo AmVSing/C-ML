@@ -9,7 +9,8 @@
 #include <stdbool.h>
 
 #define MAX_DIMS 8
-#define MAX_ELEMS (2 << 28)
+#define MAX_ELEMS (1 << 28)
+#define MATRIX_RANK 2
 /* 
 the stride for each tensor is a stack allocated array of integers, where
 moving one position in the ith dimension corresponds to moving 
@@ -42,6 +43,7 @@ typedef struct tensor_s {
 Tensor make_tensor(size_t rank, const size_t shape[]); // creates 0 tensor
 // Tensor itself is not malloc-d but the tensor's data is
 Tensor tensor_from_data(size_t rank, const size_t shape[], float* data); // create tensor from data
+// input array can be stack or heap allocated
 void free_tensor(Tensor* t); 
 
 // other helpful funcs
@@ -52,8 +54,7 @@ Tensor* tensor_rand(Tensor* t, float min, float max); // creates tensor populate
 /* ops */
 
 // shape comparison funcs
-bool tensor_addable(const Tensor* t1, const Tensor* t2); // true iff t1 and t2 have the same shape
-bool tensor_multiplicable(const Tensor* t1, const Tensor* t2); // true iff t1 and t2 are dot product compatible
+bool same_shape(const Tensor* t1, const Tensor* t2); // true if t1->shape == t2->shape
 bool is_matrix(const Tensor* t); // true iff t points to a matrix
 
 // actual ops - (tensor, scalar)

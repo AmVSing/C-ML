@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /*
 struct from tensor.h
@@ -35,7 +36,6 @@ static void compute_strides(Tensor* t) {
     }
 
 }
-
 
 Tensor make_tensor(size_t rank, const size_t shape[]) {
     assert ( rank <= MAX_DIMS ); // rank is unsigned so no need for >= 0
@@ -78,6 +78,15 @@ Tensor make_tensor(size_t rank, const size_t shape[]) {
 
 }
 
+Tensor tensor_from_data(size_t rank, const size_t shape[], float* data) {
+    assert ( data != NULL );
+    Tensor t = make_tensor(rank, shape);
+
+    memcpy(t.data, data, t.no_elems * sizeof(*data));
+
+    return t;
+}
+
 // helpful functions
 
 static float rand_float(float min, float max) {
@@ -115,3 +124,30 @@ void free_tensor(Tensor* t) {
 
     *t = (Tensor){0}; // reset Tensor to 0
 }
+
+
+// shape comparison functions
+
+bool same_shape(const Tensor* t1, const Tensor* t2) {
+    assert ( t1 != NULL );
+    assert( t2 != NULL );
+
+
+    if (t1->rank != t2->rank) return false;
+
+    for (size_t i = 0; i < t1->rank; i++) {
+        if (t1->shape[i] != t2->shape[i]) return false;
+    }
+    return true;
+}
+
+bool is_matrix(const Tensor* t) {
+    return (t->rank == MATRIX_RANK);
+}
+
+// operations
+// tensor-scalar ops
+// Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
+
+// }
+// Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out); // multiples all entries by x
