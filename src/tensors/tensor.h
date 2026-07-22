@@ -42,7 +42,8 @@ typedef struct tensor_s {
 // create
 Tensor make_tensor(size_t rank, const size_t shape[]); // creates 0 tensor
 // Tensor itself is not malloc-d but the tensor's data is
-Tensor tensor_from_data(size_t rank, const size_t shape[], float* data); // create tensor from data
+Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data); // create tensor from data
+Tensor tensor_copy(Tensor t); // create copy of existing tensor
 // input array can be stack or heap allocated
 void free_tensor(Tensor* t); 
 

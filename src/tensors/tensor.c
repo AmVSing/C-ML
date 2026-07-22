@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+typedef float (*scalar_op)(float, float);
 /*
 struct from tensor.h
 
@@ -37,7 +39,7 @@ static void compute_strides(Tensor* t) {
 
 }
 
-Tensor make_tensor(size_t rank, const size_t shape[]) {
+static Tensor make_tensor_uninit(size_t rank, const size_t shape[]) {
     assert ( rank <= MAX_DIMS ); // rank is unsigned so no need for >= 0
     assert( shape != NULL || rank == 0 ); // if rank = 0, then scalar, shape can be null
 
@@ -57,18 +59,18 @@ Tensor make_tensor(size_t rank, const size_t shape[]) {
         t.shape[i] = shape[i];
     }
 
-    // check if nmemb for calloc can be represented as a size_t
+    // check if nmemb for malloc can be represented as a size_t
     // technically redundant given current max elems and type of t.data
     if (t.no_elems > SIZE_MAX / sizeof(*t.data)) {
-        fprintf(stderr, "Tensor is too large to be calloc-d\n");
+        fprintf(stderr, "Tensor is too large to be malloc-d\n");
         exit(EXIT_FAILURE);
     }
 
-    t.data = calloc(t.no_elems, sizeof(*t.data));
+    t.data = malloc(t.no_elems * sizeof(*t.data));
     t.owns_data = true;
 
     if (t.data == NULL) {
-        fprintf(stderr, "Error while calloc-ing data in make_tensor\n");
+        fprintf(stderr, "Error while malloc-ing data in make_tensor\n");
         exit(EXIT_FAILURE);
     }
 
@@ -78,15 +80,30 @@ Tensor make_tensor(size_t rank, const size_t shape[]) {
 
 }
 
-Tensor tensor_from_data(size_t rank, const size_t shape[], float* data) {
+Tensor make_tensor(size_t rank, const size_t shape[]) {
+    // calls make_tensor_uninit then sets every element to 0
+    Tensor t = make_tensor_uninit(rank, shape);
+
+    for (size_t i = 0; i < t.no_elems; i++) {
+        t.data[i] = 0;
+    }
+
+    return t;
+}
+
+Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data) {
     assert ( data != NULL );
-    Tensor t = make_tensor(rank, shape);
+    Tensor t = make_tensor_uninit(rank, shape);
 
     memcpy(t.data, data, t.no_elems * sizeof(*data));
 
     return t;
 }
 
+
+inline Tensor tensor_copy(const Tensor* t) {
+    return tensor_from_data(t->rank, t->shape, &(t->data));
+}
 // helpful functions
 
 static float rand_float(float min, float max) {
@@ -142,12 +159,29 @@ bool same_shape(const Tensor* t1, const Tensor* t2) {
 }
 
 bool is_matrix(const Tensor* t) {
+    assert ( t != NULL );
     return (t->rank == MATRIX_RANK);
 }
 
 // operations
 // tensor-scalar ops
-// Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
+static inline float add_float(float x, float y) { return x + y; }
 
-// }
-// Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out); // multiples all entries by x
+static inline float mult_float(float x, float y) { return x * y; }
+
+static inline Tensor* tensor_scalar_op(const Tensor* t, float x, Tensor* out, scalar_op op) {    
+    assert( t != NULL );
+    assert( out != NULL );
+    assert( op != NULL );
+    
+    for (size_t i = 0; i < t->no_elems; i++) {
+        out->data[i] = (*op)(t->data[i], x); // elem `op` scalar 
+    }
+    return out;
+}
+inline Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
+    return tensor_scalar_op(t, x, out, &add_float);
+}
+inline Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out) {
+    return tensor_scalar_op(t, x, out, &mult_float);
+}
