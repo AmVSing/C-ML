@@ -4,6 +4,7 @@
 
 #include "tensor.h"
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -45,16 +46,29 @@ Tensor make_tensor(size_t rank, const size_t shape[]) {
     t.rank = rank;
     t.no_elems = 1;
 
-    for (size_t i = 0; i < rank; i++) {
+    for (size_t i = 0; i < rank; i++) { // doesn't run for scalar
+        assert( shape[i] > 0 ); // handles dimensions with 0 length
+
+        if (t.no_elems > MAX_ELEMS / shape[i]) {
+            fprintf(stderr, "Tensor has too many elements\n");
+            exit(EXIT_FAILURE);
+        }
         t.no_elems *= shape[i];
         t.shape[i] = shape[i];
+    }
+
+    // check if nmemb for calloc can be represented as a size_t
+    // technically redundant given current max elems and type of t.data
+    if (t.no_elems > SIZE_MAX / sizeof(*t.data)) {
+        fprintf(stderr, "Tensor is too large to be calloc-d\n");
+        exit(EXIT_FAILURE);
     }
 
     t.data = calloc(t.no_elems, sizeof(*t.data));
     t.owns_data = true;
 
     if (t.data == NULL) {
-        fprintf(stderr, "Error while malloc-ing data in make_tensor\n");
+        fprintf(stderr, "Error while calloc-ing data in make_tensor\n");
         exit(EXIT_FAILURE);
     }
 

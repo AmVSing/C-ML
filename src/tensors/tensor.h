@@ -9,7 +9,7 @@
 #include <stdbool.h>
 
 #define MAX_DIMS 8
-
+#define MAX_ELEMS (2 << 28)
 /* 
 the stride for each tensor is a stack allocated array of integers, where
 moving one position in the ith dimension corresponds to moving 
