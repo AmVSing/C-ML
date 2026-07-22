@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-typedef float (*scalar_op)(float, float);
 /*
 struct from tensor.h
 
@@ -84,9 +82,7 @@ Tensor make_tensor(size_t rank, const size_t shape[]) {
     // calls make_tensor_uninit then sets every element to 0
     Tensor t = make_tensor_uninit(rank, shape);
 
-    for (size_t i = 0; i < t.no_elems; i++) {
-        t.data[i] = 0;
-    }
+    memset(t.data, 0, t.no_elems * sizeof(*(t.data)));
 
     return t;
 }
@@ -102,7 +98,7 @@ Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data) {
 
 
 inline Tensor tensor_copy(const Tensor* t) {
-    return tensor_from_data(t->rank, t->shape, &(t->data));
+    return tensor_from_data(t->rank, t->shape, t->data);
 }
 // helpful functions
 
@@ -158,30 +154,32 @@ bool same_shape(const Tensor* t1, const Tensor* t2) {
     return true;
 }
 
-bool is_matrix(const Tensor* t) {
+inline bool is_matrix(const Tensor* t) {
     assert ( t != NULL );
     return (t->rank == MATRIX_RANK);
 }
 
 // operations
 // tensor-scalar ops
-static inline float add_float(float x, float y) { return x + y; }
 
-static inline float mult_float(float x, float y) { return x * y; }
-
-static inline Tensor* tensor_scalar_op(const Tensor* t, float x, Tensor* out, scalar_op op) {    
+Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
     assert( t != NULL );
     assert( out != NULL );
-    assert( op != NULL );
-    
+
     for (size_t i = 0; i < t->no_elems; i++) {
-        out->data[i] = (*op)(t->data[i], x); // elem `op` scalar 
+        out->data[i] = (t->data[i] + x); // elem `op` scalar 
     }
+
     return out;
 }
-inline Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
-    return tensor_scalar_op(t, x, out, &add_float);
-}
-inline Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out) {
-    return tensor_scalar_op(t, x, out, &mult_float);
+
+Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out) {
+    assert( t != NULL );
+    assert( out != NULL );
+
+    for (size_t i = 0; i < t->no_elems; i++) {
+        out->data[i] = (t->data[i] * x); // elem `op` scalar 
+    }
+
+    return out;
 }

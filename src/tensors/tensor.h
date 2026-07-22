@@ -43,7 +43,7 @@ typedef struct tensor_s {
 Tensor make_tensor(size_t rank, const size_t shape[]); // creates 0 tensor
 // Tensor itself is not malloc-d but the tensor's data is
 Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data); // create tensor from data
-Tensor tensor_copy(Tensor t); // create copy of existing tensor
+Tensor tensor_copy(const Tensor* t); // create copy of existing tensor
 // input array can be stack or heap allocated
 void free_tensor(Tensor* t); 
 
@@ -60,7 +60,9 @@ bool is_matrix(const Tensor* t); // true iff t points to a matrix
 
 // actual ops - (tensor, scalar)
 Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out); // adds x to all entries
+// PRE: same_shape has been called
 Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out); // multiples all entries by x
+// PRE: same_shape has been called
 
 // actual ops - (tensor, tensor)
 Tensor* tensor_add(const Tensor* t1, const Tensor* t2, Tensor* res);
