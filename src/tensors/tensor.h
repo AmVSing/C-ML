@@ -9,7 +9,7 @@
 #include <stdbool.h>
 
 #define MAX_DIMS 8
-#define MAX_ELEMS (1 << 28)
+#define MAX_ELEMS ((size_t)1 << 28)
 #define MATRIX_RANK 2
 /* 
 the stride for each tensor is a stack allocated array of integers, where
@@ -34,7 +34,7 @@ typedef struct tensor_s {
     size_t shape[MAX_DIMS]; // shape[n] = size of dimension n
     size_t strides[MAX_DIMS]; // stores how many positions we move in memory if index increases by 1
     size_t no_elems; // total no. elems
-    float* data; // malloc-ed block of memory (ALWAYS MALLOC-ED)
+    float* data; // malloc-ed block of memory (ALWAYS MALLOC-ED, might have been malloc-ed by another tensor)
     bool owns_data; // if not, dont need to call free
 } Tensor;
 
@@ -76,7 +76,7 @@ Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res);
 // matrix ops
 
 bool matmultiplicable(const Tensor* m1, const Tensor* m2);
-Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out); 
+Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out);
 
 Tensor transpose_view(const Tensor* m); // works in O(1) time to create a transposed view
 // INVALID WHEN ORIGINAL TENSOR IS FREE'D
