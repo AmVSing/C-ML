@@ -1,5 +1,7 @@
 CC := gcc
 
+.DEFAULT_GOAL := all
+
 CPPFLAGS := -Isrc/tensors
 CFLAGS := -std=c11 -Wall -Werror -Wpedantic -g -fsanitize=address,undefined
 LDFLAGS := -fsanitize=address,undefined
@@ -16,8 +18,9 @@ MATMUL_PERF_TEST := $(BUILD_DIR)/matmul_perf_test$(EXE_EXT)
 MATMUL_PERF_TEST_SOURCES := test/tensors/matmul_perf_test.c src/tensors/tensor.c
 MATMUL_PERF_TEST_HEADERS := src/tensors/tensor.h
 
-.PHONY: matmul_perf_test
+.PHONY: all matmul_perf_test
 
+all: matmul_perf_test
 matmul_perf_test: $(MATMUL_PERF_TEST)
 
 $(MATMUL_PERF_TEST): $(MATMUL_PERF_TEST_SOURCES) $(MATMUL_PERF_TEST_HEADERS) | $(BUILD_DIR)

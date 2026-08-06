@@ -27,5 +27,11 @@ int main(void) {
     const size_t result_shape[] = {a_shape[0], b_shape[1]};
     Tensor result = make_tensor(MATRIX_RANK, result_shape);
     matmul(&a, &b, &result);
+
+    free_tensor(&result);
+    free_tensor(&a);
+    free_tensor(&b);
+    
+    return 0;
 }
 
