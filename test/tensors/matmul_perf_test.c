@@ -10,6 +10,40 @@
 #include <stdlib.h>
 #include <time.h>
 
+typedef Tensor* (*matmul_func)(const Tensor* m1, const Tensor* m2, Tensor* out);
+// function pointer to a matmul function
+
+static volatile float benchmark_sink; // acts as a sink, so matmul results appear used though they aren't
+// volatile so that compiler doesn't just delete accesses because it's not used anywhere else
+
+static double benchmark_matmul(
+    matmul_func matmul,
+    const Tensor* m1, 
+    const Tensor* m2,
+    Tensor* out,
+    int reps
+) {
+    // benchmarks matrix multiplication by performing the matrix multiplication
+    // `reps` times, and returns average time taken to multiply
+
+    (*matmul)(m1, m2, out); // called to warm up cache and allocated
+
+    const clock_t start = clock();
+
+    for (int i = 0; i < reps; i++) {
+        (*matmul)(m1, m2, out)
+    }
+
+    const clock_t end = clock();
+
+    benchmark_sink += out->data[1]; // prevent compiler from optimising the matmuls away
+
+    const double time = (double) (end-start) / (double) CLOCKS_PER_SEC;
+    // calculates number of clock ticks then divides by clocks per sec
+    
+    return time * 1000.0 / (double) reps;
+    
+}
 
 static inline size_t flatten_index(Tensor* m, size_t i, size_t j) {
     return i * m->strides[0] + j * m->strides[1];
@@ -17,6 +51,12 @@ static inline size_t flatten_index(Tensor* m, size_t i, size_t j) {
 static Tensor* naive_matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
     // performs naive matrix multiplication by setting
     // C[i][j] = sum over k (A[row][k] * B[k][column])
+
+    assert( matmultiplicable(m1, m2) );
+    assert(is_matrix(out));
+    assert(out != m1 && out != m2);
+    assert(out->shape[0] == m1->shape[0]);
+    assert(out->shape[1] == m2->shape[1]);
 
     const size_t rows = m1->shape[0];
     const size_t cols = m2->shape[1];
