@@ -10,6 +10,31 @@
 #include <stdlib.h>
 #include <time.h>
 
+
+static inline size_t flatten_index(Tensor* m, size_t i, size_t j) {
+    return i * m->strides[0] + j * m->strides[1];
+}
+static Tensor* naive_matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
+    // performs naive matrix multiplication by setting
+    // C[i][j] = sum over k (A[row][k] * B[k][column])
+
+    const size_t rows = m1->shape[0];
+    const size_t cols = m2->shape[1];
+    const size_t shared = m1->shape[1]; // or m2->shape[0];
+
+    for (size_t i = 0; i < rows; i++) {
+        for (size_t j = 0; j < cols; j++) {
+            float sum = 0.0f;
+            for (size_t k = 0; k < shared; k++) {
+                sum += m1->data[flatten_index(m1, i, k)] * m2->data[flatten_index(m2, k, j)];
+            }
+            out->data[flatten_index(out, i, j)] = sum;
+        }
+    }
+    return out;
+}
+
+
 int main(void) {
     const size_t a_shape[] = {2, 3};
     const size_t b_shape[] = {3, 2};
@@ -31,7 +56,7 @@ int main(void) {
     free_tensor(&result);
     free_tensor(&a);
     free_tensor(&b);
-    
+
     return 0;
 }
 
