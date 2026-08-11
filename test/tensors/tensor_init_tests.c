@@ -1,3 +1,3 @@
 /*
-    tests for tensor intialisation functions
+    Tests for tensor initialization functions.
 */
