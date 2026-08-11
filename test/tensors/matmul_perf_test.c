@@ -2,6 +2,13 @@
     Test of the efficiency of different matrix multiplication algorithms
 */
 
+/*
+    Example output on CPU:
+    256 x 256 * 256 x 256, 100 reps 
+    naive: 239.106 ms, optimised: 101.603 ms
+    speedup: 2.35x
+*/
+
 #include "../../src/tensors/tensor.h"
 
 #include <math.h>
@@ -9,14 +16,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <assert.h>
+
+#define MIN_ENTRY (-100.0f)
+#define MAX_ENTRY (100.0f)
 
 typedef Tensor* (*matmul_func)(const Tensor* m1, const Tensor* m2, Tensor* out);
 // function pointer to a matmul function
 
-static volatile float benchmark_sink; // acts as a sink, so matmul results appear used though they aren't
+static volatile float bench_sink; // acts as a sink, so matmul results appear used though they aren't
 // volatile so that compiler doesn't just delete accesses because it's not used anywhere else
 
-static double benchmark_matmul(
+static double bench_matmul(
     matmul_func matmul,
     const Tensor* m1, 
     const Tensor* m2,
@@ -31,12 +42,12 @@ static double benchmark_matmul(
     const clock_t start = clock();
 
     for (int i = 0; i < reps; i++) {
-        (*matmul)(m1, m2, out)
+        (*matmul)(m1, m2, out);
     }
 
     const clock_t end = clock();
 
-    benchmark_sink += out->data[1]; // prevent compiler from optimising the matmuls away
+    bench_sink += out->data[1]; // prevent compiler from optimising the matmuls away
 
     const double time = (double) (end-start) / (double) CLOCKS_PER_SEC;
     // calculates number of clock ticks then divides by clocks per sec
@@ -45,7 +56,7 @@ static double benchmark_matmul(
     
 }
 
-static inline size_t flatten_index(Tensor* m, size_t i, size_t j) {
+static inline size_t flatten_index(const Tensor* m, size_t i, size_t j) {
     return i * m->strides[0] + j * m->strides[1];
 }
 static Tensor* naive_matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
@@ -74,29 +85,36 @@ static Tensor* naive_matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
     return out;
 }
 
+static void bench_contiguous(
+    size_t rows,
+    size_t shared,
+    size_t cols,
+    int reps
+) {
+   const size_t m1_shape[] = {rows, shared};
+   const size_t m2_shape[] = {shared, cols};
+   const size_t out_shape[] = {rows, cols};
+   
+   Tensor m1 = make_tensor(MATRIX_RANK, m1_shape);
+   Tensor m2 = make_tensor(MATRIX_RANK, m2_shape);
+   Tensor out = make_tensor(MATRIX_RANK, out_shape);
+
+   tensor_rand(&m1, MIN_ENTRY, MAX_ENTRY);
+   tensor_rand(&m2, MIN_ENTRY, MAX_ENTRY);
+
+   const double naive_avg = bench_matmul(&naive_matmul, &m1, &m2, &out, reps);
+   const double optimised_avg = bench_matmul(&matmul, &m1, &m2, &out, reps);
+
+   fprintf(stdout, "%zu x %zu * %zu x %zu, %d reps \nnaive: %.3f ms, optimised: %.3f ms\nspeedup: %.2fx\n", 
+    rows, shared, shared, cols, reps, naive_avg, optimised_avg, naive_avg/optimised_avg);
+
+   free_tensor(&m1);
+   free_tensor(&m2);
+   free_tensor(&out);
+}
 
 int main(void) {
-    const size_t a_shape[] = {2, 3};
-    const size_t b_shape[] = {3, 2};
 
-    const float a_data[] = {1.0f, 2.0f, 3.0f, 
-                            4.0f, 5.0f, 6.0f};
-    
-    const float b_data[] = {7.0f, 8.0f,
-                            9.0f, 10.0f,
-                            11.0f, 12.0f};
-    
-    Tensor a = tensor_from_data(MATRIX_RANK, a_shape, a_data);
-    Tensor b = tensor_from_data(MATRIX_RANK, b_shape, b_data);
-
-    const size_t result_shape[] = {a_shape[0], b_shape[1]};
-    Tensor result = make_tensor(MATRIX_RANK, result_shape);
-    matmul(&a, &b, &result);
-
-    free_tensor(&result);
-    free_tensor(&a);
-    free_tensor(&b);
-
-    return 0;
+    bench_contiguous(256,256,256,100);
 }
 
