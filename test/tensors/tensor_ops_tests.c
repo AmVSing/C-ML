@@ -9,23 +9,19 @@
 static const float ABSOLUTE_TOLERANCE = 1.0e-6f;
 static const float RELATIVE_TOLERANCE = 1.0e-6f;
 
-typedef Tensor* (*TensorBinaryFunction)(const Tensor* left,
-                                        const Tensor* right,
-                                        Tensor* out);
+typedef Tensor* (*TensorBinaryFunction)(const Tensor* left, const Tensor* right, Tensor* out);
 
 typedef Tensor* (*TensorScalarFunction)(const Tensor* input, float scalar, Tensor* out);
 
-static void test_expected_actual_close(TestContext* context,
-                          const Tensor* actual,
-                          const float expected_data[]) {
+static void test_expected_actual_close(TestContext* context, const Tensor* actual,
+                                       const float expected_data[]) {
     // wrapper around test_tensor_close that creates a tensor representing
     // the expected tensor and then tests if the actual and expected are
     // close
     Tensor expected = tensor_from_data(actual->rank, actual->shape, expected_data);
 
     TEST_EXPECT(context,
-                test_tensors_close(
-                    &expected, actual, ABSOLUTE_TOLERANCE, RELATIVE_TOLERANCE));
+                test_tensors_close(&expected, actual, ABSOLUTE_TOLERANCE, RELATIVE_TOLERANCE));
 
     free_tensor(&expected);
 }
@@ -36,7 +32,7 @@ static void test_same_shape(TestContext* context) {
     // these two should be the same as each other
     const size_t matrix_shape[] = {2, 3};
     const size_t same_matrix_shape[] = {2, 3};
-    
+
     // should be different when compared to every other:
     const size_t reordered_shape[] = {3, 2};
     const size_t vector_shape[] = {6};
@@ -79,20 +75,16 @@ static void test_is_matrix(TestContext* context) {
     free_tensor(&scalar);
 }
 
-static void test_tensor_op_scalar_helper(
-    TestContext* context,
-    TensorScalarFunction op,
-    Tensor* tensor,
-    float scalar,
-    const float expected_data[]
-) {
+static void test_tensor_op_scalar_helper(TestContext* context, TensorScalarFunction op,
+                                         Tensor* tensor, float scalar,
+                                         const float expected_data[]) {
     // helper for scalar addition and scalar multiplication operations
     Tensor out = make_tensor(tensor->rank, tensor->shape);
     Tensor original_copy = tensor_copy(tensor);
 
     // check return out Tensor*
     TEST_EXPECT(context, (*op)(tensor, scalar, &out) == &out);
-    
+
     // check close to expected
     test_expected_actual_close(context, &out, expected_data);
 
@@ -121,14 +113,14 @@ static void test_tensor_add_scalar(TestContext* context) {
     }
     // create tensor and test
     Tensor tensor = tensor_from_data(MATRIX_RANK, shape, input_data);
-    test_tensor_op_scalar_helper(context, tensor_add_scalar, &tensor, add_value, expected_data); 
-    
+    test_tensor_op_scalar_helper(context, tensor_add_scalar, &tensor, add_value, expected_data);
+
     free_tensor(&tensor);
 }
 
 static void test_tensor_mult_scalar(TestContext* context) {
     // tests that tensor_mult_scalar works as intended
-    // should multiply every element by constant 
+    // should multiply every element by constant
 
     // initialise input data
     const size_t shape[] = {2, 3};
@@ -141,18 +133,13 @@ static void test_tensor_mult_scalar(TestContext* context) {
     }
     // create tensor and test
     Tensor tensor = tensor_from_data(MATRIX_RANK, shape, input_data);
-    test_tensor_op_scalar_helper(context, tensor_mult_scalar, &tensor, mult_value, expected_data); 
-    
+    test_tensor_op_scalar_helper(context, tensor_mult_scalar, &tensor, mult_value, expected_data);
+
     free_tensor(&tensor);
 }
 
-static void test_binary_op_helper(
-    TestContext* context,
-    TensorBinaryFunction function,
-    Tensor* left,
-    Tensor* right,
-    const float expected_data[]
-) {
+static void test_binary_op_helper(TestContext* context, TensorBinaryFunction function, Tensor* left,
+                                  Tensor* right, const float expected_data[]) {
     // helper for tensor-tensor ops
 
     // create out Tensor
@@ -169,18 +156,16 @@ static void test_binary_op_helper(
     TEST_EXPECT(context, test_tensors_deep_equal(left, &original_left));
     TEST_EXPECT(context, test_tensors_deep_equal(right, &original_right));
 
-
     // inplace, should modify left
     TEST_EXPECT(context, function(left, right, left) == left);
     test_expected_actual_close(context, left, expected_data);
-    
+
     // right should be unchanged
     TEST_EXPECT(context, test_tensors_deep_equal(right, &original_right));
 
     free_tensor(&original_left);
     free_tensor(&original_right);
     free_tensor(&out);
-
 }
 
 static void test_tensor_add(TestContext* context) {

@@ -7,12 +7,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-static void correct_metadata(TestContext* context,
-                            const Tensor* tensor,
-                            size_t rank,
-                            const size_t shape[],
-                            const size_t strides[],
-                            size_t no_elems) {
+static void correct_metadata(TestContext* context, const Tensor* tensor, size_t rank,
+                             const size_t shape[], const size_t strides[], size_t no_elems) {
     // check that a tensor has the expected metadata (not checking data)
     TEST_EXPECT(context, tensor->rank == rank);
     TEST_EXPECT(context, tensor->no_elems == no_elems);
@@ -32,14 +28,14 @@ static void test_make_tensor(TestContext* context) {
 
     TEST_EXPECT(context, scalar.rank == 0);
     TEST_EXPECT(context, scalar.no_elems == 1);
-    TEST_EXPECT(context, scalar.data != NULL); // check successful malloc
+    TEST_EXPECT(context, scalar.data != NULL);    // check successful malloc
     TEST_EXPECT(context, scalar.data[0] == 0.0f); // check initialised to 0
-    TEST_EXPECT(context, scalar.owns_data); // should own
+    TEST_EXPECT(context, scalar.owns_data);       // should own
 
     // 3D test case
     size_t shape[] = {2, 3, 4};
     const size_t expected_shape[] = {2, 3, 4};
-    const size_t expected_strides[] = {12, 4, 1}; 
+    const size_t expected_strides[] = {12, 4, 1};
     // strides[0] = 4 * 3 * 1
     // strides [1] = 4 * 1
     // strides[2] = 1
@@ -50,7 +46,7 @@ static void test_make_tensor(TestContext* context) {
     // each element should be initialised as 0
     for (size_t i = 0; i < tensor.no_elems; ++i) {
         TEST_EXPECT(context, tensor.data[i] == 0.0f);
-    } 
+    }
 
     // check that make_tensor copies shape, and doesn't rely on the caller array
     shape[0] = 99;
@@ -63,7 +59,7 @@ static void test_make_tensor(TestContext* context) {
 static void test_tensor_from_data(TestContext* context) {
     // check that tensor_from_data works as intended
 
-    const size_t shape[] = {2, 3}; // 2 x 3 matrix
+    const size_t shape[] = {2, 3};   // 2 x 3 matrix
     const size_t strides[] = {3, 1}; // strides[0] = 3 * 1, strides[1] = 1
     float source[] = {1.0f, -2.5f, 3.25f, 4.0f, 5.5f, -6.0f};
     const float expected[] = {1.0f, -2.5f, 3.25f, 4.0f, 5.5f, -6.0f};
@@ -72,8 +68,8 @@ static void test_tensor_from_data(TestContext* context) {
     correct_metadata(context, &tensor, MATRIX_RANK, shape, strides, 6);
 
     // should copy the array, shouldn't rely on source array
-    TEST_EXPECT(context, tensor.data != source); 
-    source[0] = 1000.0f; 
+    TEST_EXPECT(context, tensor.data != source);
+    source[0] = 1000.0f;
 
     for (size_t i = 0; i < tensor.no_elems; ++i) {
         TEST_EXPECT(context, tensor.data[i] == expected[i]);
@@ -85,7 +81,7 @@ static void test_tensor_from_data(TestContext* context) {
 static void test_tensor_copy(TestContext* context) {
     // check tensor_copy creates a deep copy
 
-    const size_t shape[] = {2, 2}; 
+    const size_t shape[] = {2, 2};
     const float values[] = {1.0f, 2.0f, 3.0f, 4.0f};
     Tensor original = tensor_from_data(MATRIX_RANK, shape, values);
     Tensor copy = tensor_copy(&original);
@@ -157,8 +153,8 @@ static void test_tensor_rand(TestContext* context) {
 
     const float min_and_max = 2.5f;
 
-
-    TEST_EXPECT(context, tensor_rand(&tensor, min_and_max, min_and_max) == &tensor); // should just fill
+    TEST_EXPECT(context,
+                tensor_rand(&tensor, min_and_max, min_and_max) == &tensor); // should just fill
     for (size_t i = 0; i < tensor.no_elems; ++i) {
         TEST_EXPECT(context, tensor.data[i] == min_and_max);
     }

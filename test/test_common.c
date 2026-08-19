@@ -9,12 +9,8 @@
 
 static const int FIELD_WIDTH = 20; // used for aligning test results
 
-void test_expect(
-    TestContext* context, 
-    bool condition, 
-    const char* file, 
-    int line, 
-    const char* expression) {
+void test_expect(TestContext* context, bool condition, const char* file, int line,
+                 const char* expression) {
 
     (context->assertions)++;
 
@@ -27,8 +23,7 @@ void test_expect(
 void test_run(TestContext* context, const char* name, TestFunction function) {
     const int failures_before = context->failures;
     function(context);
-    printf("%-*s %s\n", FIELD_WIDTH, name, 
-        context->failures == failures_before ? "PASS" : "FAIL");
+    printf("%-*s %s\n", FIELD_WIDTH, name, context->failures == failures_before ? "PASS" : "FAIL");
 }
 
 int test_summary(const TestContext* context) {
@@ -36,20 +31,17 @@ int test_summary(const TestContext* context) {
     return context->failures == 0 ? 0 : 1;
 }
 
-bool test_floats_close(
-    float expected,
-    float actual,
-    float absolute_tolerance,
-    float relative_tolerance) {
+bool test_floats_close(float expected, float actual, float absolute_tolerance,
+                       float relative_tolerance) {
 
     // early return if they are considered equal under ==
     if (expected == actual) {
         return true;
     }
-    
+
     // if either are +/- inf or NaN then early return
     if (!isfinite(expected) || !isfinite(actual)) {
-        return false; 
+        return false;
     }
 
     const float difference = fabsf(expected - actual);
@@ -71,9 +63,7 @@ static size_t logical_offset(const Tensor* tensor, size_t linear_index) {
     return offset;
 }
 
-bool test_tensors_close(const Tensor* expected,
-                        const Tensor* actual,
-                        float absolute_tolerance,
+bool test_tensors_close(const Tensor* expected, const Tensor* actual, float absolute_tolerance,
                         float relative_tolerance) {
     if (expected == NULL || actual == NULL || expected->rank != actual->rank ||
         expected->no_elems != actual->no_elems) {
@@ -90,8 +80,8 @@ bool test_tensors_close(const Tensor* expected,
         const float expected_value = expected->data[logical_offset(expected, i)];
         const float actual_value = actual->data[logical_offset(actual, i)];
 
-        if (!test_floats_close(
-                expected_value, actual_value, absolute_tolerance, relative_tolerance)) {
+        if (!test_floats_close(expected_value, actual_value, absolute_tolerance,
+                               relative_tolerance)) {
             return false;
         }
     }

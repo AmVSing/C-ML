@@ -20,13 +20,9 @@ typedef Tensor* (*MatmulFunction)(const Tensor* m1, const Tensor* m2, Tensor* ou
 
 static volatile float benchmark_sink;
 
-static double benchmark_matmul(
-    MatmulFunction function,
-    const Tensor* m1,
-    const Tensor* m2,
-    Tensor* out,
-    size_t repetitions) {
-        
+static double benchmark_matmul(MatmulFunction function, const Tensor* m1, const Tensor* m2,
+                               Tensor* out, size_t repetitions) {
+
     assert(function != NULL);
     assert(repetitions > 0);
 
@@ -65,8 +61,7 @@ static Tensor* naive_matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
             float sum = 0.0f;
 
             for (size_t k = 0; k < shared; ++k) {
-                sum += m1->data[matrix_index(m1, row, k)] *
-                       m2->data[matrix_index(m2, k, column)];
+                sum += m1->data[matrix_index(m1, row, k)] * m2->data[matrix_index(m2, k, column)];
             }
 
             out->data[matrix_index(out, row, column)] = sum;
@@ -76,10 +71,7 @@ static Tensor* naive_matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
     return out;
 }
 
-static void benchmark_contiguous(size_t rows,
-                                 size_t shared,
-                                 size_t columns,
-                                 size_t repetitions) {
+static void benchmark_contiguous(size_t rows, size_t shared, size_t columns, size_t repetitions) {
     const size_t m1_shape[] = {rows, shared};
     const size_t m2_shape[] = {shared, columns};
     const size_t out_shape[] = {rows, columns};
@@ -90,21 +82,13 @@ static void benchmark_contiguous(size_t rows,
     tensor_rand(&m1, MIN_ENTRY, MAX_ENTRY);
     tensor_rand(&m2, MIN_ENTRY, MAX_ENTRY);
 
-    const double naive_average =
-        benchmark_matmul(naive_matmul, &m1, &m2, &out, repetitions);
-    const double optimised_average =
-        benchmark_matmul(matmul, &m1, &m2, &out, repetitions);
+    const double naive_average = benchmark_matmul(naive_matmul, &m1, &m2, &out, repetitions);
+    const double optimised_average = benchmark_matmul(matmul, &m1, &m2, &out, repetitions);
 
     printf("%zu x %zu * %zu x %zu, %zu reps\n"
            "naive: %.3f ms, optimised: %.3f ms\n"
            "speedup: %.2fx\n",
-           rows,
-           shared,
-           shared,
-           columns,
-           repetitions,
-           naive_average,
-           optimised_average,
+           rows, shared, shared, columns, repetitions, naive_average, optimised_average,
            naive_average / optimised_average);
 
     free_tensor(&m1);
