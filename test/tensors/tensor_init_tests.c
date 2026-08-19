@@ -2,6 +2,7 @@
     Tests for tensor initialization functions.
 */
 
+#include "../../src/tensors/tensor.h"
 #include "../test_common.h"
 
 #include <stdbool.h>

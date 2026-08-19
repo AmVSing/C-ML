@@ -2,6 +2,7 @@
     Tests for tensor shape helpers, scalar operations, and elementwise operations.
 */
 
+#include "../../src/tensors/tensor.h"
 #include "../test_common.h"
 
 #include <stdlib.h>
