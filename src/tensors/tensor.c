@@ -4,6 +4,7 @@
 
 #include "tensor.h"
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +23,8 @@ typedef struct tensor_s {
 } Tensor;
 */
 
-// Tensor creations
+/* tensor try initialisation functions, and static helpers*/
+
 static void compute_strides(Tensor* t) {
     assert(t != NULL);
 
@@ -38,12 +40,15 @@ static void compute_strides(Tensor* t) {
 }
 
 static void tensor_panic(const char* function, TensorStatus status) {
+    // called when an error occurs, prints it to stderr and aborts
     fprintf(stderr, "%s: %s\n", function, tensor_status_string(status));
     abort();
 }
 
 static TensorStatus tensor_try_make_uninit(Tensor* out, size_t rank, const size_t shape[]) {
-    if (out == NULL) {
+    // tries to make, if failure then returns corresponding status
+    // otherwise returns success and creates tensor at out
+    if (out == NULL) { // check output not null
         return TENSOR_NULL_E;
     }
     if (rank > MAX_DIMS) {
@@ -90,6 +95,7 @@ static TensorStatus tensor_try_make_uninit(Tensor* out, size_t rank, const size_
 }
 
 TensorStatus tensor_try_make(Tensor* out, size_t rank, const size_t shape[]) {
+    // wrapper around static try make uninit, initialises vals to 0
     if (out == NULL) {
         return TENSOR_NULL_E;
     }
@@ -101,14 +107,14 @@ TensorStatus tensor_try_make(Tensor* out, size_t rank, const size_t shape[]) {
         return status;
     }
 
-    memset(t.data, 0, t.no_elems * sizeof(*(t.data)));
+    memset(t.data, 0, t.no_elems * sizeof(*(t.data))); // initialised as 0s
 
     *out = t;
     return TENSOR_OK;
 }
 
-TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[],
-                                  const float* data) {
+TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[], const float* data) {
+    // wrapper around try make uninit which initialises data with data input
     if (out == NULL || data == NULL) {
         return TENSOR_NULL_E;
     }
@@ -127,17 +133,23 @@ TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[]
 }
 
 TensorStatus tensor_try_copy(Tensor* out, const Tensor* t) {
+    // tries copying to out, on error returns corresponding status
     if (out == NULL || t == NULL) {
         return TENSOR_NULL_E;
     }
     if (out == t) {
-        return TENSOR_ALIAS_E;
+        return TENSOR_ALIAS_E; // args should be distinct
     }
 
     return tensor_try_from_data(out, t->rank, t->shape, t->data);
 }
 
+/* Initialisation functions (mainly wrappers around try funcs) */
+
 Tensor make_tensor(size_t rank, const size_t shape[]) {
+    // wrapper around try make that aborts if error
+    // otherwises returns created Tensor
+
     Tensor t = {0};
     const TensorStatus status = tensor_try_make(&t, rank, shape);
 
@@ -149,6 +161,9 @@ Tensor make_tensor(size_t rank, const size_t shape[]) {
 }
 
 Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data) {
+    // wrapper around tensor try from data that aborts on error
+    // otherwise returns tensor
+
     Tensor t = {0};
     const TensorStatus status = tensor_try_from_data(&t, rank, shape, data);
 
@@ -160,6 +175,7 @@ Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data) {
 }
 
 Tensor tensor_copy(const Tensor* t) {
+    // wrapper around tensor try copy that aborts on error otherwise returns tensor
     Tensor copy = {0};
     const TensorStatus status = tensor_try_copy(&copy, t);
 
@@ -169,32 +185,71 @@ Tensor tensor_copy(const Tensor* t) {
 
     return copy;
 }
-// helpful functions
+
+/* Other helpful functions */
 
 static float rand_float(float min, float max) {
     return min + (max - min) * ((float)rand() / (float)RAND_MAX);
 }
 
-Tensor* tensor_fill(Tensor* t, float value) {
-    assert(t != NULL);
+TensorStatus tensor_try_fill(Tensor* t, float value) {
+    // try fill with value, returns error on failure
+    if (t == NULL || t->data == NULL) {
+        return TENSOR_NULL_E;
+    }
+    if (!tensor_is_contiguous(t)) {
+        return TENSOR_LAYOUT_E;
+    }
 
     for (size_t i = 0; i < t->no_elems; i++) {
         t->data[i] = value;
     }
+
+    return TENSOR_OK;
+}
+
+Tensor* tensor_fill(Tensor* t, float value) {
+    // wrapper around try fill aborts on error
+    const TensorStatus status = tensor_try_fill(t, value);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_fill", status);
+    }
+
     return t;
 }
 
-Tensor* tensor_rand(Tensor* t, float min, float max) {
-    assert(t != NULL);
+TensorStatus tensor_try_rand(Tensor* t, float min, float max) {
+    // randomised tensor
+    if (t == NULL || t->data == NULL) {
+        return TENSOR_NULL_E;
+    }
+    if (!isfinite(min) || !isfinite(max) || min > max) {
+        return TENSOR_INVALID_RANGE_E;
+    }
+    if (!tensor_is_contiguous(t)) {
+        return TENSOR_LAYOUT_E;
+    }
 
     for (size_t i = 0; i < t->no_elems; i++) {
         t->data[i] = rand_float(min, max);
     }
 
+    return TENSOR_OK;
+}
+
+Tensor* tensor_rand(Tensor* t, float min, float max) {
+    // wrapper around try aborts on error
+    const TensorStatus status = tensor_try_rand(t, min, max);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_rand", status);
+    }
+
     return t;
 }
 
-// free-ing
+/* free-ing */
 void free_tensor(Tensor* t) {
     assert(t != NULL);
 
@@ -205,104 +260,230 @@ void free_tensor(Tensor* t) {
     *t = (Tensor){0}; // reset Tensor to 0
 }
 
-// shape comparison functions
+/* shape comparison funcs */
 
 bool same_shape(const Tensor* t1, const Tensor* t2) {
-    assert(t1 != NULL);
-    assert(t2 != NULL);
-
-    if (t1->rank != t2->rank)
+    if (t1 == NULL || t2 == NULL) {
         return false;
+    }
+
+    if (t1->rank != t2->rank) {
+        return false;
+    }
 
     for (size_t i = 0; i < t1->rank; i++) {
-        if (t1->shape[i] != t2->shape[i])
+        if (t1->shape[i] != t2->shape[i]) {
             return false;
+        }
     }
     return true;
 }
 
-inline bool is_matrix(const Tensor* t) {
-    assert(t != NULL);
-    return (t->rank == MATRIX_RANK);
+bool is_matrix(const Tensor* t) {
+    return t != NULL && t->rank == MATRIX_RANK;
 }
 
-// operations
-// tensor-scalar ops
+bool tensor_is_contiguous(const Tensor* t) {
+    if (t == NULL) {
+        return false;
+    }
 
-static void valid_bin_scalar_op(const Tensor* t, const Tensor* out) {
-    assert(t != NULL);
-    assert(out != NULL);
+    size_t expected_stride = 1;
 
-    assert(same_shape(t, out));
+    for (size_t dimension = t->rank; dimension > 0; dimension--) {
+        const size_t index = dimension - 1;
+
+        if (t->strides[index] != expected_stride) {
+            return false;
+        }
+
+        expected_stride *= t->shape[index];
+    }
+
+    return true;
 }
 
-Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
-    valid_bin_scalar_op(t, out);
+/* operations */
+/* tensor-scalar ops*/
+
+static TensorStatus valid_bin_scalar_op(const Tensor* t, const Tensor* out) {
+    if (t == NULL || out == NULL || t->data == NULL || out->data == NULL) {
+        return TENSOR_NULL_E;
+    }
+    if (!same_shape(t, out)) {
+        return TENSOR_SHAPE_MISMATCH_E;
+    }
+    if (!tensor_is_contiguous(t) || !tensor_is_contiguous(out)) {
+        return TENSOR_LAYOUT_E;
+    }
+
+    return TENSOR_OK;
+}
+
+TensorStatus tensor_try_add_scalar(const Tensor* t, float x, Tensor* out) {
+    const TensorStatus status = valid_bin_scalar_op(t, out);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
 
     for (size_t i = 0; i < t->no_elems; i++) {
         out->data[i] = (t->data[i] + x); // elem `op` scalar
     }
 
+    return TENSOR_OK;
+}
+
+Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out) {
+    const TensorStatus status = tensor_try_add_scalar(t, x, out);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_add_scalar", status);
+    }
+
     return out;
 }
 
-Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out) {
-    valid_bin_scalar_op(t, out);
+TensorStatus tensor_try_mult_scalar(const Tensor* t, float x, Tensor* out) {
+    const TensorStatus status = valid_bin_scalar_op(t, out);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
 
     for (size_t i = 0; i < t->no_elems; i++) {
         out->data[i] = (t->data[i] * x); // elem `op` scalar
     }
 
+    return TENSOR_OK;
+}
+
+Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out) {
+    const TensorStatus status = tensor_try_mult_scalar(t, x, out);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_mult_scalar", status);
+    }
+
     return out;
 }
 
-// Tensor-tensor ops
+/* tensor-tensor ops */
 
-static void valid_bin_tensor_op(const Tensor* t1, const Tensor* t2, const Tensor* res) {
-    assert(t1 != NULL);
-    assert(t2 != NULL);
-    assert(res != NULL);
+static TensorStatus valid_bin_tensor_op(const Tensor* t1, const Tensor* t2, const Tensor* res) {
+    if (t1 == NULL || t2 == NULL || res == NULL || t1->data == NULL || t2->data == NULL ||
+        res->data == NULL) {
+        return TENSOR_NULL_E;
+    }
+    if (!same_shape(t1, t2) || !same_shape(t1, res)) {
+        return TENSOR_SHAPE_MISMATCH_E;
+    }
+    if (!tensor_is_contiguous(t1) || !tensor_is_contiguous(t2) || !tensor_is_contiguous(res)) {
+        return TENSOR_LAYOUT_E;
+    }
 
-    assert(same_shape(t1, t2));
-    assert(same_shape(t1, res));
+    return TENSOR_OK;
 }
+
 // functions below all have the same shape, just copied out purely
 // for efficiency
-Tensor* tensor_add(const Tensor* t1, const Tensor* t2, Tensor* res) {
-    valid_bin_tensor_op(t1, t2, res);
+TensorStatus tensor_try_add(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = valid_bin_tensor_op(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
 
     for (size_t i = 0; i < t1->no_elems; i++) {
         res->data[i] = t1->data[i] + t2->data[i];
     }
+
+    return TENSOR_OK;
+}
+
+Tensor* tensor_add(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = tensor_try_add(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_add", status);
+    }
+
     return res;
 }
-Tensor* tensor_sub(const Tensor* t1, const Tensor* t2, Tensor* res) {
-    valid_bin_tensor_op(t1, t2, res);
+
+TensorStatus tensor_try_sub(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = valid_bin_tensor_op(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
 
     for (size_t i = 0; i < t1->no_elems; i++) {
         res->data[i] = t1->data[i] - t2->data[i];
     }
+
+    return TENSOR_OK;
+}
+
+Tensor* tensor_sub(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = tensor_try_sub(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_sub", status);
+    }
+
     return res;
 }
-Tensor* tensor_mult(const Tensor* t1, const Tensor* t2, Tensor* res) {
-    valid_bin_tensor_op(t1, t2, res);
+
+TensorStatus tensor_try_mult(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = valid_bin_tensor_op(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
 
     for (size_t i = 0; i < t1->no_elems; i++) {
         res->data[i] = t1->data[i] * t2->data[i];
     }
+
+    return TENSOR_OK;
+}
+
+Tensor* tensor_mult(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = tensor_try_mult(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_mult", status);
+    }
+
     return res;
 }
 
-Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res) {
-    valid_bin_tensor_op(t1, t2, res);
+TensorStatus tensor_try_div(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = valid_bin_tensor_op(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
 
     for (size_t i = 0; i < t1->no_elems; i++) {
         res->data[i] = t1->data[i] / t2->data[i];
     }
+
+    return TENSOR_OK;
+}
+
+Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res) {
+    const TensorStatus status = tensor_try_div(t1, t2, res);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_div", status);
+    }
+
     return res;
 }
 
-// matrix ops
+/* matrix ops */
 
 bool matmultiplicable(const Tensor* m1, const Tensor* m2) {
     assert(is_matrix(m1));
@@ -384,6 +565,7 @@ Tensor* transpose(const Tensor* m, Tensor* out) {
 }
 
 Tensor* transpose_inplace(Tensor* m) {
+    // transposes matrix in place (i.e. output Tensor* is provided Tensor*)
     assert(is_matrix(m));
     assert(m->shape[0] == m->shape[1]); // square only
 
@@ -401,8 +583,8 @@ Tensor* transpose_inplace(Tensor* m) {
 }
 
 const char* tensor_status_string(TensorStatus status) {
+    // return string corresponding to status
     switch (status) {
-
         case TENSOR_OK:
             return "Success! No errors";
         case TENSOR_NULL_E:

@@ -194,6 +194,25 @@ static void test_tensor_rand(TestContext* context) {
     free_tensor(&tensor);
 }
 
+static void test_checked_fill_and_rand(TestContext* context) {
+    const size_t shape[] = {2, 3};
+    Tensor tensor = make_tensor(MATRIX_RANK, shape);
+    Tensor transposed_view = transpose_view(&tensor);
+
+    TEST_EXPECT(context, tensor_try_fill(&tensor, 3.0f) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_rand(&tensor, -1.0f, 1.0f) == TENSOR_OK);
+
+    TEST_EXPECT(context, tensor_try_fill(NULL, 3.0f) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_rand(NULL, -1.0f, 1.0f) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_rand(&tensor, 1.0f, -1.0f) == TENSOR_INVALID_RANGE_E);
+    TEST_EXPECT(context, tensor_try_fill(&transposed_view, 3.0f) == TENSOR_LAYOUT_E);
+    TEST_EXPECT(context,
+                tensor_try_rand(&transposed_view, -1.0f, 1.0f) == TENSOR_LAYOUT_E);
+
+    free_tensor(&transposed_view);
+    free_tensor(&tensor);
+}
+
 int main(void) {
     // run all the tests
     TestContext context = {0}; // initialise context
@@ -204,6 +223,7 @@ int main(void) {
     test_run(&context, "checked constructors", test_checked_constructors);
     test_run(&context, "tensor_fill", test_tensor_fill);
     test_run(&context, "tensor_rand", test_tensor_rand);
+    test_run(&context, "checked fill and rand", test_checked_fill_and_rand);
 
     return test_summary(&context);
 }

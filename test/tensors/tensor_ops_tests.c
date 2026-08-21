@@ -46,6 +46,7 @@ static void test_same_shape(TestContext* context) {
     // check same and commutative
     TEST_EXPECT(context, same_shape(&matrix, &matrix));
     TEST_EXPECT(context, same_shape(&matrix, &same_matrix));
+    TEST_EXPECT(context, !same_shape(NULL, &matrix));
 
     // check not same
     TEST_EXPECT(context, !same_shape(&matrix, &reordered));
@@ -70,6 +71,7 @@ static void test_is_matrix(TestContext* context) {
     TEST_EXPECT(context, !is_matrix(&scalar));
     TEST_EXPECT(context, !is_matrix(&vector));
     TEST_EXPECT(context, is_matrix(&matrix));
+    TEST_EXPECT(context, !is_matrix(NULL));
 
     free_tensor(&matrix);
     free_tensor(&vector);
@@ -228,6 +230,47 @@ static void test_tensor_div(TestContext* context) {
     free_tensor(&right);
 }
 
+static void test_checked_operations(TestContext* context) {
+    const size_t shape[] = {2, 3};
+    const size_t other_shape[] = {3, 2};
+    Tensor left = make_tensor(MATRIX_RANK, shape);
+    Tensor right = make_tensor(MATRIX_RANK, shape);
+    Tensor out = make_tensor(MATRIX_RANK, shape);
+    Tensor other = make_tensor(MATRIX_RANK, other_shape);
+    Tensor transposed_view = transpose_view(&left);
+
+    tensor_fill(&left, 4.0f);
+    tensor_fill(&right, 2.0f);
+
+    TEST_EXPECT(context, tensor_is_contiguous(&left));
+    TEST_EXPECT(context, !tensor_is_contiguous(&transposed_view));
+    TEST_EXPECT(context, !tensor_is_contiguous(NULL));
+
+    TEST_EXPECT(context, tensor_try_add_scalar(&left, 1.0f, &out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_mult_scalar(&left, 2.0f, &out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_add(&left, &right, &out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_sub(&left, &right, &out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_mult(&left, &right, &out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_div(&left, &right, &out) == TENSOR_OK);
+
+    TEST_EXPECT(context, tensor_try_add_scalar(NULL, 1.0f, &out) == TENSOR_NULL_E);
+    TEST_EXPECT(context,
+                tensor_try_add_scalar(&left, 1.0f, &other) == TENSOR_SHAPE_MISMATCH_E);
+    TEST_EXPECT(context, tensor_try_add(&left, NULL, &out) == TENSOR_NULL_E);
+    TEST_EXPECT(context,
+                tensor_try_add(&left, &right, &other) == TENSOR_SHAPE_MISMATCH_E);
+    TEST_EXPECT(context,
+                tensor_try_add_scalar(&transposed_view, 1.0f, &other) == TENSOR_LAYOUT_E);
+    TEST_EXPECT(context,
+                tensor_try_add(&transposed_view, &other, &other) == TENSOR_LAYOUT_E);
+
+    free_tensor(&transposed_view);
+    free_tensor(&other);
+    free_tensor(&out);
+    free_tensor(&right);
+    free_tensor(&left);
+}
+
 int main(void) {
     TestContext context = {0};
 
@@ -239,6 +282,7 @@ int main(void) {
     test_run(&context, "tensor_sub", test_tensor_sub);
     test_run(&context, "tensor_mult", test_tensor_mult);
     test_run(&context, "tensor_div", test_tensor_div);
+    test_run(&context, "checked operations", test_checked_operations);
 
     return test_summary(&context);
 }

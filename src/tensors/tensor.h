@@ -38,7 +38,7 @@ typedef struct tensor_s {
     bool owns_data; // if not, dont need to call free
 } Tensor;
 
-typedef enum tensor_status_e_s {
+typedef enum tensor_status_e_en {
     TENSOR_OK,
     TENSOR_NULL_E, // null pointer error
     TENSOR_RANK_E, // invalid rank error
@@ -75,6 +75,9 @@ void free_tensor(Tensor* t);
 
 // other helpful funcs
 
+TensorStatus tensor_try_fill(Tensor* t, float value);
+TensorStatus tensor_try_rand(Tensor* t, float min, float max);
+
 Tensor* tensor_fill(Tensor* t, float value); // Sets all tensor elements to value
 Tensor* tensor_rand(Tensor* t, float min,
                     float max); // creates tensor populated with randfloats from [min, max]
@@ -85,13 +88,22 @@ Tensor* tensor_rand(Tensor* t, float min,
 
 bool same_shape(const Tensor* t1, const Tensor* t2); // true if t1->shape == t2->shape
 bool is_matrix(const Tensor* t);                     // true iff t points to a matrix
+bool tensor_is_contiguous(const Tensor* t);
 
 // actual ops - (tensor, scalar)
+
+TensorStatus tensor_try_add_scalar(const Tensor* t, float x, Tensor* out);
+TensorStatus tensor_try_mult_scalar(const Tensor* t, float x, Tensor* out);
 
 Tensor* tensor_add_scalar(const Tensor* t, float x, Tensor* out);  // adds x to all entries
 Tensor* tensor_mult_scalar(const Tensor* t, float x, Tensor* out); // multiples all entries by x
 
 // actual ops - (tensor, tensor)
+
+TensorStatus tensor_try_add(const Tensor* t1, const Tensor* t2, Tensor* res);
+TensorStatus tensor_try_sub(const Tensor* t1, const Tensor* t2, Tensor* res);
+TensorStatus tensor_try_mult(const Tensor* t1, const Tensor* t2, Tensor* res);
+TensorStatus tensor_try_div(const Tensor* t1, const Tensor* t2, Tensor* res);
 
 Tensor* tensor_add(const Tensor* t1, const Tensor* t2, Tensor* res);
 Tensor* tensor_sub(const Tensor* t1, const Tensor* t2, Tensor* res);
