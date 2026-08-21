@@ -38,6 +38,23 @@ typedef struct tensor_s {
     bool owns_data; // if not, dont need to call free
 } Tensor;
 
+typedef enum tensor_status_e_s {
+    TENSOR_OK,
+    TENSOR_NULL_E, // null pointer error
+    TENSOR_RANK_E, // invalid rank error
+    TENSOR_SHAPE_E, // invalid shape error
+    TENSOR_SIZE_OVERFLOW_E, // tensor size overflows
+    TENSOR_ALLOC_E, // tensor allocation fails
+    TENSOR_SHAPE_MISMATCH_E, // tensor shapes misalign
+    TENSOR_ALIAS_E, // two tensors share storage, but the op requires not-shared
+                    // e.g. matmul(&left, &right, &left), or transpose(&m, &m)
+    TENSOR_LAYOUT_E, // function doesn't support strided pattern
+    TENSOR_INVALID_RANGE_E, // invalid range for function e.g. tensor_rand(&t, 100.0f, 0.0f) (min > max)
+    TENSOR_DEVICE_E // GPU specific failures
+} TensorStatus;
+
+
+
 /* creation + destruction */
 
 // create
@@ -93,5 +110,7 @@ Tensor* transpose_inplace(Tensor* m); // transposes the matrix in place FOR SQUA
 // O(n/2) instead of O(n)
 
 /* display helpers */
+const char* tensor_status_string(TensorStatus status);
+// returns a string corresponding to errors if any occured
 
 #endif

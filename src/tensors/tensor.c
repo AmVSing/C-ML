@@ -329,3 +329,32 @@ Tensor* transpose_inplace(Tensor* m) {
     }
     return m;
 }
+
+const char* tensor_status_string(TensorStatus status) {
+    switch (status) {
+
+        case TENSOR_OK:
+            return "Success! No errors";
+        case TENSOR_NULL_E:
+            return "Null pointer error";
+        case TENSOR_RANK_E:
+            return "Invalid tensor rank";
+        case TENSOR_SHAPE_E:
+            return "Invalid tensor shape";
+        case TENSOR_SIZE_OVERFLOW_E:
+            return "Tensor size overflow";
+        case TENSOR_ALLOC_E:
+            return "Failed to allocate memory for tensor";
+        case TENSOR_SHAPE_MISMATCH_E:
+            return "Tensor shape mismatch";
+        case TENSOR_ALIAS_E:
+            return "Unsupported tensor aliasing";
+        case TENSOR_LAYOUT_E:
+            return "Unsupported tensor stride pattern";
+        case TENSOR_INVALID_RANGE_E:
+            return "Invalid range provided to tensor function";
+        case TENSOR_DEVICE_E:
+            return "Device operation failed";
+    }
+    return "unknown tensor error";
+}
