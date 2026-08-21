@@ -59,6 +59,12 @@ typedef enum tensor_status_e_s {
 
 // create
 
+// `out` must point to an empty Tensor and is unchanged if creation fails
+TensorStatus tensor_try_make(Tensor* out, size_t rank, const size_t shape[]);
+TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[],
+                                  const float* data);
+TensorStatus tensor_try_copy(Tensor* out, const Tensor* t);
+
 Tensor make_tensor(size_t rank, const size_t shape[]); // creates 0 tensor
 // Tensor itself is not malloc-d but the tensor's data is
 Tensor tensor_from_data(size_t rank, const size_t shape[],

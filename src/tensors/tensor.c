@@ -37,9 +37,21 @@ static void compute_strides(Tensor* t) {
     }
 }
 
-static Tensor make_tensor_uninit(size_t rank, const size_t shape[]) {
-    assert(rank <= MAX_DIMS);           // rank is unsigned so no need for >= 0
-    assert(shape != NULL || rank == 0); // if rank = 0, then scalar, shape can be null
+static void tensor_panic(const char* function, TensorStatus status) {
+    fprintf(stderr, "%s: %s\n", function, tensor_status_string(status));
+    abort();
+}
+
+static TensorStatus tensor_try_make_uninit(Tensor* out, size_t rank, const size_t shape[]) {
+    if (out == NULL) {
+        return TENSOR_NULL_E;
+    }
+    if (rank > MAX_DIMS) {
+        return TENSOR_RANK_E;
+    }
+    if (shape == NULL && rank > 0) {
+        return TENSOR_NULL_E;
+    }
 
     Tensor t = {0}; // set all fields to 0
 
@@ -47,11 +59,12 @@ static Tensor make_tensor_uninit(size_t rank, const size_t shape[]) {
     t.no_elems = 1;
 
     for (size_t i = 0; i < rank; i++) { // doesn't run for scalar
-        assert(shape[i] > 0);           // handles dimensions with 0 length
+        if (shape[i] == 0) {
+            return TENSOR_SHAPE_E;
+        }
 
         if (t.no_elems > MAX_ELEMS / shape[i]) {
-            fprintf(stderr, "Tensor has too many elements\n");
-            exit(EXIT_FAILURE);
+            return TENSOR_SIZE_OVERFLOW_E;
         }
         t.no_elems *= shape[i];
         t.shape[i] = shape[i];
@@ -60,44 +73,101 @@ static Tensor make_tensor_uninit(size_t rank, const size_t shape[]) {
     // check if nmemb for malloc can be represented as a size_t
     // technically redundant given current max elems and type of t.data
     if (t.no_elems > SIZE_MAX / sizeof(*t.data)) {
-        fprintf(stderr, "Tensor is too large to be malloc-d\n");
-        exit(EXIT_FAILURE);
+        return TENSOR_SIZE_OVERFLOW_E;
     }
 
     t.data = malloc(t.no_elems * sizeof(*t.data));
     t.owns_data = true;
 
     if (t.data == NULL) {
-        fprintf(stderr, "Error while malloc-ing data in make_tensor\n");
-        exit(EXIT_FAILURE);
+        return TENSOR_ALLOC_E;
     }
 
     compute_strides(&t);
 
-    return t;
+    *out = t;
+    return TENSOR_OK;
+}
+
+TensorStatus tensor_try_make(Tensor* out, size_t rank, const size_t shape[]) {
+    if (out == NULL) {
+        return TENSOR_NULL_E;
+    }
+
+    Tensor t = {0};
+    const TensorStatus status = tensor_try_make_uninit(&t, rank, shape);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+
+    memset(t.data, 0, t.no_elems * sizeof(*(t.data)));
+
+    *out = t;
+    return TENSOR_OK;
+}
+
+TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[],
+                                  const float* data) {
+    if (out == NULL || data == NULL) {
+        return TENSOR_NULL_E;
+    }
+
+    Tensor t = {0};
+    const TensorStatus status = tensor_try_make_uninit(&t, rank, shape);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+
+    memcpy(t.data, data, t.no_elems * sizeof(*data));
+
+    *out = t;
+    return TENSOR_OK;
+}
+
+TensorStatus tensor_try_copy(Tensor* out, const Tensor* t) {
+    if (out == NULL || t == NULL) {
+        return TENSOR_NULL_E;
+    }
+    if (out == t) {
+        return TENSOR_ALIAS_E;
+    }
+
+    return tensor_try_from_data(out, t->rank, t->shape, t->data);
 }
 
 Tensor make_tensor(size_t rank, const size_t shape[]) {
-    // calls make_tensor_uninit then sets every element to 0
-    Tensor t = make_tensor_uninit(rank, shape);
+    Tensor t = {0};
+    const TensorStatus status = tensor_try_make(&t, rank, shape);
 
-    memset(t.data, 0, t.no_elems * sizeof(*(t.data)));
+    if (status != TENSOR_OK) {
+        tensor_panic("make_tensor", status);
+    }
 
     return t;
 }
 
 Tensor tensor_from_data(size_t rank, const size_t shape[], const float* data) {
-    assert(data != NULL);
-    Tensor t = make_tensor_uninit(rank, shape);
+    Tensor t = {0};
+    const TensorStatus status = tensor_try_from_data(&t, rank, shape, data);
 
-    memcpy(t.data, data, t.no_elems * sizeof(*data));
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_from_data", status);
+    }
 
     return t;
 }
 
-inline Tensor tensor_copy(const Tensor* t) {
-    assert(t != NULL);
-    return tensor_from_data(t->rank, t->shape, t->data);
+Tensor tensor_copy(const Tensor* t) {
+    Tensor copy = {0};
+    const TensorStatus status = tensor_try_copy(&copy, t);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_copy", status);
+    }
+
+    return copy;
 }
 // helpful functions
 

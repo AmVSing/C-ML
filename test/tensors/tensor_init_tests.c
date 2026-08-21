@@ -102,6 +102,37 @@ static void test_tensor_copy(TestContext* context) {
     free_tensor(&original);
 }
 
+static void test_checked_constructors(TestContext* context) {
+    const size_t shape[] = {2, 2};
+    const size_t zero_shape[] = {2, 0};
+    const size_t overflow_shape[] = {MAX_ELEMS, 2};
+    const float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    Tensor tensor = {0};
+
+    TEST_EXPECT(context, tensor_try_make(&tensor, MATRIX_RANK, shape) == TENSOR_OK);
+    free_tensor(&tensor);
+
+    TEST_EXPECT(context,
+                tensor_try_from_data(&tensor, MATRIX_RANK, shape, data) == TENSOR_OK);
+
+    Tensor copy = {0};
+    TEST_EXPECT(context, tensor_try_copy(&copy, &tensor) == TENSOR_OK);
+    TEST_EXPECT(context, test_tensors_deep_equal(&tensor, &copy));
+    free_tensor(&copy);
+    free_tensor(&tensor);
+
+    TEST_EXPECT(context, tensor_try_make(NULL, MATRIX_RANK, shape) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_make(&tensor, 1, NULL) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_make(&tensor, MAX_DIMS + 1, shape) == TENSOR_RANK_E);
+    TEST_EXPECT(context, tensor_try_make(&tensor, 2, zero_shape) == TENSOR_SHAPE_E);
+    TEST_EXPECT(context,
+                tensor_try_make(&tensor, 2, overflow_shape) == TENSOR_SIZE_OVERFLOW_E);
+    TEST_EXPECT(context,
+                tensor_try_from_data(&tensor, MATRIX_RANK, shape, NULL) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_copy(&tensor, NULL) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor.data == NULL);
+}
+
 static void test_tensor_fill(TestContext* context) {
     // check that tensor_fill works as intended
 
@@ -170,6 +201,7 @@ int main(void) {
     test_run(&context, "make_tensor", test_make_tensor);
     test_run(&context, "tensor_from_data", test_tensor_from_data);
     test_run(&context, "tensor_copy", test_tensor_copy);
+    test_run(&context, "checked constructors", test_checked_constructors);
     test_run(&context, "tensor_fill", test_tensor_fill);
     test_run(&context, "tensor_rand", test_tensor_rand);
 
