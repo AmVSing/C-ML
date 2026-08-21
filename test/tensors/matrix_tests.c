@@ -28,14 +28,20 @@ static void test_matmultiplicable(TestContext* context) {
     const size_t left_shape[] = {2, 3};
     const size_t compatible_shape[] = {3, 4};
     const size_t incompatible_shape[] = {2, 4};
+    const size_t vector_shape[] = {3};
 
     Tensor left = make_tensor(MATRIX_RANK, left_shape);
     Tensor compatible = make_tensor(MATRIX_RANK, compatible_shape);
     Tensor incompatible = make_tensor(MATRIX_RANK, incompatible_shape);
+    Tensor vector = make_tensor(1, vector_shape);
 
     TEST_EXPECT(context, matmultiplicable(&left, &compatible));
     TEST_EXPECT(context, !matmultiplicable(&left, &incompatible));
+    TEST_EXPECT(context, !matmultiplicable(NULL, &compatible));
+    TEST_EXPECT(context, !matmultiplicable(&left, NULL));
+    TEST_EXPECT(context, !matmultiplicable(&vector, &compatible));
 
+    free_tensor(&vector);
     free_tensor(&incompatible);
     free_tensor(&compatible);
     free_tensor(&left);
@@ -179,6 +185,75 @@ static void test_transpose_inplace(TestContext* context) {
     free_tensor(&matrix);
 }
 
+static void test_checked_matrix_operations(TestContext* context) {
+    const size_t square_shape[] = {2, 2};
+    const size_t incompatible_shape[] = {3, 2};
+    const size_t wrong_out_shape[] = {2, 3};
+    const size_t vector_shape[] = {4};
+    const float left_data[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    const float right_data[] = {5.0f, 6.0f, 7.0f, 8.0f};
+
+    Tensor left = tensor_from_data(MATRIX_RANK, square_shape, left_data);
+    Tensor right = tensor_from_data(MATRIX_RANK, square_shape, right_data);
+    Tensor out = make_tensor(MATRIX_RANK, square_shape);
+    Tensor incompatible = make_tensor(MATRIX_RANK, incompatible_shape);
+    Tensor wrong_out = make_tensor(MATRIX_RANK, wrong_out_shape);
+    Tensor vector = make_tensor(1, vector_shape);
+    Tensor left_view = transpose_view(&left);
+
+    TEST_EXPECT(context, tensor_try_matmul(&left, &right, &out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_matmul(NULL, &right, &out) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_matmul(&left, NULL, &out) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_matmul(&left, &right, NULL) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_matmul(&vector, &right, &out) == TENSOR_RANK_E);
+    TEST_EXPECT(context,
+                tensor_try_matmul(&left, &incompatible, &out) == TENSOR_SHAPE_MISMATCH_E);
+    TEST_EXPECT(context,
+                tensor_try_matmul(&left, &right, &wrong_out) == TENSOR_SHAPE_MISMATCH_E);
+    TEST_EXPECT(context, tensor_try_matmul(&left, &right, &left) == TENSOR_ALIAS_E);
+    TEST_EXPECT(context, tensor_try_matmul(&left, &right, &left_view) == TENSOR_ALIAS_E);
+    TEST_EXPECT(context, tensor_try_matmul(&left_view, &right, &out) == TENSOR_LAYOUT_E);
+
+    Tensor checked_view = {0};
+    TEST_EXPECT(context, tensor_try_transpose_view(&left, &checked_view) == TENSOR_OK);
+    TEST_EXPECT(context, checked_view.data == left.data);
+    free_tensor(&checked_view);
+
+    TEST_EXPECT(context, tensor_try_transpose_view(NULL, &checked_view) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_transpose_view(&left, NULL) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_transpose_view(&vector, &checked_view) == TENSOR_RANK_E);
+    TEST_EXPECT(context, tensor_try_transpose_view(&left, &left) == TENSOR_ALIAS_E);
+
+    Tensor transpose_out = make_tensor(MATRIX_RANK, square_shape);
+    TEST_EXPECT(context, tensor_try_transpose(&left, &transpose_out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_transpose(&left_view, &transpose_out) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_transpose(NULL, &transpose_out) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_transpose(&left, NULL) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_transpose(&vector, &transpose_out) == TENSOR_RANK_E);
+    TEST_EXPECT(context,
+                tensor_try_transpose(&left, &wrong_out) == TENSOR_SHAPE_MISMATCH_E);
+    TEST_EXPECT(context, tensor_try_transpose(&left, &left) == TENSOR_ALIAS_E);
+    TEST_EXPECT(context, tensor_try_transpose(&left, &left_view) == TENSOR_ALIAS_E);
+
+    Tensor inplace = tensor_copy(&left);
+    TEST_EXPECT(context, tensor_try_transpose_inplace(&inplace) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_transpose_inplace(&left_view) == TENSOR_OK);
+    TEST_EXPECT(context, tensor_try_transpose_inplace(NULL) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor_try_transpose_inplace(&vector) == TENSOR_RANK_E);
+    TEST_EXPECT(context,
+                tensor_try_transpose_inplace(&wrong_out) == TENSOR_SHAPE_MISMATCH_E);
+
+    free_tensor(&inplace);
+    free_tensor(&transpose_out);
+    free_tensor(&left_view);
+    free_tensor(&vector);
+    free_tensor(&wrong_out);
+    free_tensor(&incompatible);
+    free_tensor(&out);
+    free_tensor(&right);
+    free_tensor(&left);
+}
+
 int main(void) {
     TestContext context = {0};
 
@@ -187,6 +262,7 @@ int main(void) {
     test_run(&context, "transpose_view", test_transpose_view);
     test_run(&context, "transpose", test_transpose);
     test_run(&context, "transpose_inplace", test_transpose_inplace);
+    test_run(&context, "checked matrix operations", test_checked_matrix_operations);
 
     return test_summary(&context);
 }

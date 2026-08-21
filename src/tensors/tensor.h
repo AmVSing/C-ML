@@ -25,7 +25,7 @@ data = [1,2,3,4,5,6]
 shape = [2, 3]
 strides = [3, 1] (moving down a row increase position by 3, moving across
 a column increases position by 1)
-NOTE - OTHER FUNCTIONS DO NOT ALWAYS RESPECT STRIDES
+Operations either respect strides or return TENSOR_LAYOUT_E when they require contiguous data.
 */
 
 typedef struct tensor_s {
@@ -49,7 +49,7 @@ typedef enum tensor_status_e_en {
     TENSOR_ALIAS_E, // two tensors share storage, but the op requires not-shared
                     // e.g. matmul(&left, &right, &left), or transpose(&m, &m)
     TENSOR_LAYOUT_E, // function doesn't support strided pattern
-    TENSOR_INVALID_RANGE_E, // invalid range for function e.g. tensor_rand(&t, 100.0f, 0.0f) (min > max)
+    TENSOR_INVALID_RANGE_E, // invalid range, e.g. tensor_rand(&t, 100.0f, 0.0f)
     TENSOR_DEVICE_E // GPU specific failures
 } TensorStatus;
 
@@ -114,16 +114,20 @@ Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res);
 // matrix ops
 
 bool matmultiplicable(const Tensor* m1, const Tensor* m2);
+TensorStatus tensor_try_matmul(const Tensor* m1, const Tensor* m2, Tensor* out);
 Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out);
 
+TensorStatus tensor_try_transpose_view(const Tensor* m, Tensor* out);
+// `out` must point to an empty Tensor; the view borrows data from m and must not outlive m
 Tensor transpose_view(const Tensor* m); // works in O(1) time to create a transposed view
 // INVALID WHEN ORIGINAL TENSOR IS FREE'D
-// NOTE - OTHER FUNCTIONS DO NOT ALWAYS RESPECT STRIDES, PURELY FOR TESTING
 
+TensorStatus tensor_try_transpose(const Tensor* m, Tensor* out);
 Tensor* transpose(const Tensor* m, Tensor* out); // creates full transpose of matrix in O(n)
 // this version is more costly to make, but works better with sequential access due to spatial
 // locality
 
+TensorStatus tensor_try_transpose_inplace(Tensor* m);
 Tensor* transpose_inplace(Tensor* m); // transposes the matrix in place FOR SQUARE ONLY
 // O(n/2) instead of O(n)
 

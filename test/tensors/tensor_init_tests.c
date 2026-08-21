@@ -102,6 +102,29 @@ static void test_tensor_copy(TestContext* context) {
     free_tensor(&original);
 }
 
+static void test_tensor_copy_view(TestContext* context) {
+    const size_t shape[] = {2, 3};
+    const float values[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+    const float expected_values[] = {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f};
+    Tensor original = tensor_from_data(MATRIX_RANK, shape, values);
+    Tensor view = transpose_view(&original);
+    Tensor copy = tensor_copy(&view);
+    Tensor expected = tensor_from_data(MATRIX_RANK, view.shape, expected_values);
+
+    TEST_EXPECT(context, test_tensors_deep_equal(&expected, &copy));
+    TEST_EXPECT(context, tensor_is_contiguous(&copy));
+    TEST_EXPECT(context, copy.data != view.data);
+    TEST_EXPECT(context, copy.owns_data);
+
+    original.data[0] = 100.0f;
+    TEST_EXPECT(context, copy.data[0] == expected_values[0]);
+
+    free_tensor(&expected);
+    free_tensor(&copy);
+    free_tensor(&view);
+    free_tensor(&original);
+}
+
 static void test_checked_constructors(TestContext* context) {
     const size_t shape[] = {2, 2};
     const size_t zero_shape[] = {2, 0};
@@ -118,6 +141,7 @@ static void test_checked_constructors(TestContext* context) {
     Tensor copy = {0};
     TEST_EXPECT(context, tensor_try_copy(&copy, &tensor) == TENSOR_OK);
     TEST_EXPECT(context, test_tensors_deep_equal(&tensor, &copy));
+    TEST_EXPECT(context, tensor_try_copy(&tensor, &tensor) == TENSOR_ALIAS_E);
     free_tensor(&copy);
     free_tensor(&tensor);
 
@@ -130,6 +154,24 @@ static void test_checked_constructors(TestContext* context) {
     TEST_EXPECT(context,
                 tensor_try_from_data(&tensor, MATRIX_RANK, shape, NULL) == TENSOR_NULL_E);
     TEST_EXPECT(context, tensor_try_copy(&tensor, NULL) == TENSOR_NULL_E);
+
+    Tensor invalid = {0};
+    TEST_EXPECT(context, tensor_try_copy(&tensor, &invalid) == TENSOR_NULL_E);
+    TEST_EXPECT(context, tensor.data == NULL);
+}
+
+static void test_free_tensor(TestContext* context) {
+    const size_t shape[] = {2, 2};
+    Tensor tensor = make_tensor(MATRIX_RANK, shape);
+
+    free_tensor(&tensor);
+    TEST_EXPECT(context, tensor.rank == 0);
+    TEST_EXPECT(context, tensor.no_elems == 0);
+    TEST_EXPECT(context, tensor.data == NULL);
+    TEST_EXPECT(context, !tensor.owns_data);
+
+    free_tensor(&tensor);
+    free_tensor(NULL);
     TEST_EXPECT(context, tensor.data == NULL);
 }
 
@@ -220,7 +262,9 @@ int main(void) {
     test_run(&context, "make_tensor", test_make_tensor);
     test_run(&context, "tensor_from_data", test_tensor_from_data);
     test_run(&context, "tensor_copy", test_tensor_copy);
+    test_run(&context, "tensor_copy view", test_tensor_copy_view);
     test_run(&context, "checked constructors", test_checked_constructors);
+    test_run(&context, "free_tensor", test_free_tensor);
     test_run(&context, "tensor_fill", test_tensor_fill);
     test_run(&context, "tensor_rand", test_tensor_rand);
     test_run(&context, "checked fill and rand", test_checked_fill_and_rand);

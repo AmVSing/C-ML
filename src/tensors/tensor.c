@@ -113,7 +113,8 @@ TensorStatus tensor_try_make(Tensor* out, size_t rank, const size_t shape[]) {
     return TENSOR_OK;
 }
 
-TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[], const float* data) {
+TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[],
+                                  const float* data) {
     // wrapper around try make uninit which initialises data with data input
     if (out == NULL || data == NULL) {
         return TENSOR_NULL_E;
@@ -132,16 +133,77 @@ TensorStatus tensor_try_from_data(Tensor* out, size_t rank, const size_t shape[]
     return TENSOR_OK;
 }
 
+static bool tensor_layout_fits_data(const Tensor* t) {
+    if (t == NULL || t->data == NULL || t->rank > MAX_DIMS || t->no_elems == 0) {
+        return false;
+    }
+
+    size_t max_offset = 0;
+
+    for (size_t dimension = 0; dimension < t->rank; dimension++) {
+        if (t->shape[dimension] == 0) {
+            return false;
+        }
+
+        const size_t extent = t->shape[dimension] - 1;
+        const size_t stride = t->strides[dimension];
+
+        if (stride != 0 && extent > (SIZE_MAX - max_offset) / stride) {
+            return false;
+        }
+
+        max_offset += extent * stride;
+    }
+
+    return max_offset < t->no_elems;
+}
+
+static size_t logical_offset(const Tensor* t, size_t linear_index) {
+    size_t offset = 0;
+
+    for (size_t dimension = t->rank; dimension > 0; dimension--) {
+        const size_t index = linear_index % t->shape[dimension - 1];
+        linear_index /= t->shape[dimension - 1];
+        offset += index * t->strides[dimension - 1];
+    }
+
+    return offset;
+}
+
 TensorStatus tensor_try_copy(Tensor* out, const Tensor* t) {
     // tries copying to out, on error returns corresponding status
-    if (out == NULL || t == NULL) {
+    if (out == NULL || t == NULL || t->data == NULL) {
         return TENSOR_NULL_E;
     }
     if (out == t) {
         return TENSOR_ALIAS_E; // args should be distinct
     }
 
-    return tensor_try_from_data(out, t->rank, t->shape, t->data);
+    Tensor copy = {0};
+    const TensorStatus status = tensor_try_make_uninit(&copy, t->rank, t->shape);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+    if (copy.no_elems != t->no_elems) {
+        free(copy.data);
+        return TENSOR_SHAPE_E;
+    }
+    if (!tensor_layout_fits_data(t)) {
+        free(copy.data);
+        return TENSOR_LAYOUT_E;
+    }
+
+    if (tensor_is_contiguous(t)) {
+        memcpy(copy.data, t->data, copy.no_elems * sizeof(*copy.data));
+    } else {
+        for (size_t i = 0; i < copy.no_elems; i++) {
+            copy.data[i] = t->data[logical_offset(t, i)];
+        }
+    }
+
+    *out = copy;
+    return TENSOR_OK;
 }
 
 /* Initialisation functions (mainly wrappers around try funcs) */
@@ -251,7 +313,9 @@ Tensor* tensor_rand(Tensor* t, float min, float max) {
 
 /* free-ing */
 void free_tensor(Tensor* t) {
-    assert(t != NULL);
+    if (t == NULL) {
+        return;
+    }
 
     if (t->owns_data) {
         free(t->data);
@@ -486,22 +550,64 @@ Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res) {
 /* matrix ops */
 
 bool matmultiplicable(const Tensor* m1, const Tensor* m2) {
-    assert(is_matrix(m1));
-    assert(is_matrix(m2));
+    if (!is_matrix(m1) || !is_matrix(m2)) {
+        return false;
+    }
 
     return m1->shape[1] == m2->shape[0];
 }
 
-Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
-    // assumes contiguous matrices
+static TensorStatus valid_matrix(const Tensor* m) {
+    // helper checks if a Tensor* is a valid matrix
+    // (not null, not null data, correct rank, correct layout)
+    if (m == NULL || m->data == NULL) {
+        return TENSOR_NULL_E;
+    }
+    if (!is_matrix(m)) {
+        return TENSOR_RANK_E;
+    }
+    if (!tensor_layout_fits_data(m)) {
+        return TENSOR_LAYOUT_E;
+    }
 
-    assert(matmultiplicable(m1, m2));
-    assert(is_matrix(out));
-    assert(out != m1 && out != m2);
-    assert(out->shape[0] == m1->shape[0]);
-    assert(out->shape[1] == m2->shape[1]);
+    return TENSOR_OK;
+}
 
-    // m x k `matmul` k x n -> m x n
+TensorStatus tensor_try_matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
+    // tries matmul with result in Tensor* out
+    // returns error on failure
+    
+    // check m1, m2, out valid
+    TensorStatus status = valid_matrix(m1);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+
+    status = valid_matrix(m2);
+    if (status != TENSOR_OK) {
+        return status;
+    }
+
+    status = valid_matrix(out);
+    if (status != TENSOR_OK) {
+        return status;
+    }
+    // check shapes are compatible
+    if (!matmultiplicable(m1, m2) || out->shape[0] != m1->shape[0] ||
+        out->shape[1] != m2->shape[1]) {
+        return TENSOR_SHAPE_MISMATCH_E;
+    }
+    // check out is distinct from inputs
+    if (out->data == m1->data || out->data == m2->data) {
+        return TENSOR_ALIAS_E;
+    }
+    // check contiguity (not strided)
+    if (!tensor_is_contiguous(m1) || !tensor_is_contiguous(m2) ||
+        !tensor_is_contiguous(out)) {
+        return TENSOR_LAYOUT_E;
+    }
+    // actual matmul
     const size_t m = m1->shape[0];
     const size_t k = m1->shape[1];
     const size_t n = m2->shape[1];
@@ -521,53 +627,121 @@ Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
             }
         }
     }
+
+    return TENSOR_OK;
+}
+
+Tensor* matmul(const Tensor* m1, const Tensor* m2, Tensor* out) {
+    // wrapper around try matmul that aborts on error
+    const TensorStatus status = tensor_try_matmul(m1, m2, out);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("matmul", status);
+    }
+
     return out;
 }
 
+TensorStatus tensor_try_transpose_view(const Tensor* m, Tensor* out) {
+    // tries to transspose view, returns error on failure
+
+    if (out == NULL) {
+        return TENSOR_NULL_E;
+    }
+
+    const TensorStatus status = valid_matrix(m);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+    if (m == out) {
+        return TENSOR_ALIAS_E;
+    }
+
+    Tensor view = *m;
+
+    view.shape[0] = m->shape[1];
+    view.shape[1] = m->shape[0];
+
+    view.strides[0] = m->strides[1];
+    view.strides[1] = m->strides[0];
+
+    view.owns_data = false;
+
+    *out = view;
+    return TENSOR_OK;
+}
+
 Tensor transpose_view(const Tensor* m) {
-    // INVALID WHEN ORIGINAL TENSOR IS FREE'D
-    assert(is_matrix(m)); // already checks for null
+    // wrapper around try transpose view
+    Tensor out = {0};
+    const TensorStatus status = tensor_try_transpose_view(m, &out);
 
-    Tensor out = *m;
-
-    out.shape[0] = m->shape[1];
-    out.shape[1] = m->shape[0];
-
-    out.strides[0] = m->strides[1];
-    out.strides[1] = m->strides[0];
-
-    out.owns_data = false;
+    if (status != TENSOR_OK) {
+        tensor_panic("transpose_view", status);
+    }
 
     return out;
 }
 
 static inline size_t flatten_index(const Tensor* m, size_t i, size_t j) {
+    // helper to work out physical address offset given logical i, j index
     return i * m->strides[0] + j * m->strides[1];
 }
 
-Tensor* transpose(const Tensor* m, Tensor* out) {
+TensorStatus tensor_try_transpose(const Tensor* m, Tensor* out) {
+    // tries full transpose, returns error on failure
+    
+    // check valid matrices
+    TensorStatus status = valid_matrix(m);
 
-    // check not null and matrices
-    assert(is_matrix(m));
-    assert(is_matrix(out));
+    if (status != TENSOR_OK) {
+        return status;
+    }
 
-    // check shapes align
-    assert(out->shape[0] == m->shape[1]);
-    assert(out->shape[1] == m->shape[0]);
-
+    status = valid_matrix(out);
+    if (status != TENSOR_OK) {
+        return status;
+    }
+    // check distinct m and out
+    if (out->data == m->data) {
+        return TENSOR_ALIAS_E;
+    }
+    // check valid shape
+    if (out->shape[0] != m->shape[1] || out->shape[1] != m->shape[0]) {
+        return TENSOR_SHAPE_MISMATCH_E;
+    }
+    // actual transpose
     for (size_t i = 0; i < m->shape[0]; i++) {
         for (size_t j = 0; j < m->shape[1]; j++) {
             out->data[flatten_index(out, j, i)] = m->data[flatten_index(m, i, j)];
         }
     }
 
+    return TENSOR_OK;
+}
+
+Tensor* transpose(const Tensor* m, Tensor* out) {
+    // wrapper around try transpose
+    const TensorStatus status = tensor_try_transpose(m, out);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("transpose", status);
+    }
+
     return out;
 }
 
-Tensor* transpose_inplace(Tensor* m) {
-    // transposes matrix in place (i.e. output Tensor* is provided Tensor*)
-    assert(is_matrix(m));
-    assert(m->shape[0] == m->shape[1]); // square only
+TensorStatus tensor_try_transpose_inplace(Tensor* m) {
+    // inplace transpose (i.e. original changed to be transposed)
+    const TensorStatus status = valid_matrix(m);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+    if (m->shape[0] != m->shape[1]) {
+        return TENSOR_SHAPE_MISMATCH_E;
+    }
 
     for (size_t i = 0; i < m->shape[0]; i++) {
         for (size_t j = i + 1; j < m->shape[1]; j++) {
@@ -579,6 +753,17 @@ Tensor* transpose_inplace(Tensor* m) {
             m->data[i2] = temp;
         }
     }
+
+    return TENSOR_OK;
+}
+
+Tensor* transpose_inplace(Tensor* m) {
+    const TensorStatus status = tensor_try_transpose_inplace(m);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("transpose_inplace", status);
+    }
+
     return m;
 }
 
