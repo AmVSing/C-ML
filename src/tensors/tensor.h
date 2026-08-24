@@ -50,6 +50,7 @@ typedef enum tensor_status_e_en {
                     // e.g. matmul(&left, &right, &left), or transpose(&m, &m)
     TENSOR_LAYOUT_E, // function doesn't support strided pattern
     TENSOR_INVALID_RANGE_E, // invalid range, e.g. tensor_rand(&t, 100.0f, 0.0f)
+    TENSOR_NUMERIC_E, // numeric error, e.g. float addition overflow
     TENSOR_DEVICE_E // GPU specific failures
 } TensorStatus;
 
@@ -110,6 +111,21 @@ Tensor* tensor_sub(const Tensor* t1, const Tensor* t2, Tensor* res);
 Tensor* tensor_mult(const Tensor* t1, const Tensor* t2,
                     Tensor* res); // elementwise multiplication not dot product
 Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res);
+
+// (tensor) -> tensor ops 
+
+TensorStatus tensor_try_sum(const Tensor* t, Tensor* out);
+Tensor* tensor_sum(const Tensor* t, Tensor* out);
+// writes the sum of all the elements in t to out
+// PRE: out is a scalar tensor
+
+TensorStatus tensor_try_mean(const Tensor* t, Tensor* out);
+Tensor* tensor_mean(const Tensor* t, Tensor* out);
+// writes the mean of all the elements in a tensor t to out
+// PRE: out is a scalar tensor
+
+
+
 
 // matrix ops
 

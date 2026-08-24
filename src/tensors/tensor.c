@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <float.h>
 
 /*
 struct from tensor.h
@@ -545,6 +546,116 @@ Tensor* tensor_div(const Tensor* t1, const Tensor* t2, Tensor* res) {
     }
 
     return res;
+}
+
+/* unary tensor ops */
+static TensorStatus try_sum_elems(const Tensor* t, double* out) {
+    // helper to find the sum of all elems in a tensor as a double
+    // used for summing all values and finding mean
+    // kept separately since summing may cause float overflow, but 
+    // could still have a valid mean
+
+    double sum = 0.0;
+
+    for (size_t i = 0; i < t->no_elems; i++) {
+        // all elems summed, sum is commutative, and tensors are dense
+        // and this provides better spatial locality than taking into account
+        // the stride pattern
+        sum += (double) t->data[i];  
+    }
+
+    if (!isfinite(sum)) {
+        return TENSOR_NUMERIC_E;
+    }
+
+    *out = sum;
+    return TENSOR_OK;
+}
+
+static TensorStatus validate_unary_op(const Tensor* t, const Tensor* out) {
+    // validation for mean and sum operations
+    if (t == NULL || out == NULL || t->data == NULL || out->data == NULL) {
+        return TENSOR_NULL_E;
+    }
+
+    if (out->rank != 0 || out->no_elems != 1) {
+        return TENSOR_SHAPE_MISMATCH_E;
+    }
+
+    if (t->data == out->data) {
+        return TENSOR_ALIAS_E;
+    }
+
+    return TENSOR_OK;
+}
+
+TensorStatus tensor_try_sum(const Tensor* t, Tensor* out) {
+    const TensorStatus validation_status = validate_unary_op(t, out);
+
+    if (validation_status != TENSOR_OK) {
+        return validation_status;
+    }
+    
+    double sum;
+    const TensorStatus status = try_sum_elems(t, &sum);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+
+    if (sum > FLT_MAX || sum < -FLT_MAX) {
+        return TENSOR_NUMERIC_E;
+    }
+
+    out->data[0] = (float) sum;
+    return TENSOR_OK;
+}
+
+Tensor* tensor_sum(const Tensor* t, Tensor* out) {
+    const TensorStatus status = tensor_try_sum(t, out);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_sum", status);
+    }
+    return out;
+}
+
+TensorStatus tensor_try_mean(const Tensor* t, Tensor* out) {
+    const TensorStatus validation_status = validate_unary_op(t, out);
+
+    if (validation_status != TENSOR_OK) {
+        return validation_status;
+    }
+
+    double sum;
+    const TensorStatus status = try_sum_elems(t, &sum);
+
+    if (status != TENSOR_OK) {
+        return status;
+    }
+
+    if (t->no_elems == 0) {
+        return TENSOR_SHAPE_E; // prevent division by 0
+    }
+    
+    const double mean = sum / (double) t->no_elems;
+
+    if (!isfinite(mean) || mean > FLT_MAX || mean < -FLT_MAX) {
+        return TENSOR_NUMERIC_E;
+    }
+
+    out->data[0] = (float) mean;
+
+    return TENSOR_OK;
+}
+
+Tensor* tensor_mean(const Tensor* t, Tensor* out) {
+    const TensorStatus status = tensor_try_mean(t, out);
+
+    if (status != TENSOR_OK) {
+        tensor_panic("tensor_mean", status);
+    }
+    return out;
 }
 
 /* matrix ops */
